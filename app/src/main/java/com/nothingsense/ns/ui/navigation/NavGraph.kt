@@ -1,0 +1,130 @@
+package com.nothingsense.ns.ui.navigation
+
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Chat
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Campaign
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.nothingsense.ns.R
+import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
+import com.nothingsense.ns.ui.chat.ChatDetailScreen
+import com.nothingsense.ns.ui.chat.ChatListScreen
+import com.nothingsense.ns.ui.chat.ChatViewModel
+import com.nothingsense.ns.ui.status.StatusScreen
+import com.nothingsense.ns.ui.status.StatusViewModel
+import com.nothingsense.ns.ui.channel.ChannelScreen
+import com.nothingsense.ns.ui.onboarding.OnboardingScreen
+
+import androidx.compose.material.icons.rounded.Settings
+import com.nothingsense.ns.ui.settings.SettingsScreen
+import com.nothingsense.ns.ui.settings.SettingsViewModel
+
+@Composable
+fun NavGraph() {
+    val navController = rememberNavController()
+    val chatViewModel: ChatViewModel = hiltViewModel()
+    val statusViewModel: StatusViewModel = hiltViewModel()
+    val settingsViewModel: SettingsViewModel = hiltViewModel()
+    
+    val onboardingCompleted by chatViewModel.onboardingCompleted.collectAsState()
+
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = navBackStackEntry?.destination
+
+    if (onboardingCompleted == null) return
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        bottomBar = {
+            if (currentDestination?.hasRoute<Route.ChatDetail>() == false && 
+                currentDestination?.hasRoute<Route.Onboarding>() == false) {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
+                    tonalElevation = 0.dp
+                ) {
+                    val items = listOf(
+                        Triple(stringResource(R.string.chats), Route.ChatList, Icons.Rounded.Chat),
+                        Triple(stringResource(R.string.status), Route.StatusList, Icons.Rounded.History),
+                        Triple(stringResource(R.string.channels), Route.Channels, Icons.Rounded.Campaign),
+                        Triple(stringResource(R.string.settings), Route.Settings, Icons.Rounded.Settings)
+                    )
+                    items.forEach { (label, route, icon) ->
+                        NavigationBarItem(
+                            icon = { Icon(icon, contentDescription = label) },
+                            label = { Text(label) },
+                            selected = currentDestination.hierarchy.any { it.hasRoute(route::class) },
+                            onClick = {
+                                navController.navigate(route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = if (onboardingCompleted == true) Route.ChatList else Route.Onboarding,
+            modifier = Modifier.padding(innerPadding)
+        ) {
+            composable<Route.Onboarding> {
+                OnboardingScreen(onComplete = {
+                    navController.navigate(Route.ChatList) {
+                        popUpTo(Route.Onboarding) { inclusive = true }
+                    }
+                })
+            }
+            composable<Route.ChatList> {
+                ChatListScreen(
+                    viewModel = chatViewModel,
+                    onChatClick = { chat ->
+                        navController.navigate(Route.ChatDetail(chat.id, chat.name))
+                    }
+                )
+            }
+            composable<Route.StatusList> {
+                StatusScreen(viewModel = statusViewModel)
+            }
+            composable<Route.Channels> {
+                ChannelScreen(
+                    viewModel = chatViewModel,
+                    onChannelClick = { chat ->
+                        navController.navigate(Route.ChatDetail(chat.id, chat.name))
+                    }
+                )
+            }
+            composable<Route.Settings> {
+                SettingsScreen(viewModel = settingsViewModel)
+            }
+            composable<Route.ChatDetail> { backStackEntry ->
+                val chatDetail: Route.ChatDetail = backStackEntry.toRoute()
+                ChatDetailScreen(
+                    chatId = chatDetail.chatId,
+                    chatName = chatDetail.chatName,
+                    viewModel = chatViewModel,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+        }
+    }
+}
