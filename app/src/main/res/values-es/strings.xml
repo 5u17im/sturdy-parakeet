@@ -1,0 +1,33 @@
+<resources>
+    <string name="app_name">NoSense</string>
+    <string name="chats">Chats</string>
+    <string name="status">Estados</string>
+    <string name="channels">Canales</string>
+    <string name="settings">Configuración</string>
+    <string name="no_chats">Aún no hay chats</string>
+    <string name="connect_nearby">Conéctate a nodos cercanos para empezar a chatear</string>
+    <string name="discovered_nodes">Nodos descubiertos</string>
+    <string name="searching">Buscando usuarios cercanos…</string>
+    <string name="close">Cerrar</string>
+    <string name="back">Atrás</string>
+    <string name="send">Enviar</string>
+    <string name="message_placeholder">Mensaje</string>
+    <string name="welcome">Bienvenido a NoSense</string>
+    <string name="onboarding_desc">Tu aplicación de mensajería mesh descentralizada y offline.</string>
+    <string name="choose_username">Elige un nombre de usuario</string>
+    <string name="get_started">Empezar</string>
+    <string name="no_statuses">Aún no hay estados</string>
+    <string name="add_status">Añadir estado</string>
+    <string name="status_placeholder">¿Qué tienes en mente?</string>
+    <string name="type_status">Escribe un estado…</string>
+    <string name="post">Publicar</string>
+    <string name="cancel">Cancelar</string>
+    <string name="join_public_channel">Unirse al Canal Público</string>
+    <string name="no_channels">No te has unido a ningún canal</string>
+    <string name="broadcast_desc">Transmitir a todos</string>
+    <string name="hardware_required">Hardware Requerido</string>
+    <string name="settings_title">Configuración</string>
+    <string name="unique_id">ID Único</string>
+    <string name="username">Nombre de usuario</string>
+    <string name="save">Guardar</string>
+</resources>
