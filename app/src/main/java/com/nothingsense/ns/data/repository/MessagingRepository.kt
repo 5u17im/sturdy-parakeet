@@ -1,7 +1,10 @@
 package com.nothingsense.ns.data.repository
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.provider.OpenableColumns
+import android.util.Base64
 import android.webkit.MimeTypeMap
 import com.nothingsense.ns.data.identity.IdentityManager
 import com.nothingsense.ns.data.local.dao.ChatDao
@@ -20,6 +23,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -80,33 +86,58 @@ class MessagingRepository @Inject constructor(
             else -> MessageType.FILE
         }
 
+        val targetChatId = if (packet.recipientId == null) "PUBLIC_CHANNEL" else packet.senderId
+
+        // Decode Base64 content and save to local file
+        var savedFileUri: String? = null
+        try {
+            val base64Data = packet.content
+            val fileBytes = Base64.decode(base64Data, Base64.NO_WRAP)
+
+            val receivedDir = File(context.filesDir, "received_files")
+            if (!receivedDir.exists()) receivedDir.mkdirs()
+
+            val fileName = fileMeta?.fileName ?: "file_${System.currentTimeMillis()}"
+            val destFile = File(receivedDir, "${System.currentTimeMillis()}_$fileName")
+
+            FileOutputStream(destFile).use { output ->
+                output.write(fileBytes)
+            }
+            savedFileUri = android.net.Uri.fromFile(destFile).toString()
+            android.util.Log.d("MessagingRepository", "Saved received file to $savedFileUri (${fileBytes.size} bytes)")
+        } catch (e: Exception) {
+            android.util.Log.e("MessagingRepository", "Failed to decode/save incoming file", e)
+        }
+
+        if (savedFileUri == null) return
+
         val messageEntity = MessageEntity(
             id = UUID.randomUUID().toString(),
-            chatId = packet.senderId,
+            chatId = targetChatId,
             senderId = packet.senderId,
             text = fileMeta?.fileName ?: "Received File",
             timestamp = packet.timestamp,
             type = messageType,
-            fileUri = packet.content, // contains the saved local file Uri
+            fileUri = savedFileUri,
             fileType = mimeType,
             fileName = fileMeta?.fileName ?: "File"
         )
 
-        val chat = chatDao.getChatById(packet.senderId)
+        val chat = chatDao.getChatById(targetChatId)
         if (chat == null) {
             chatDao.insertChat(
                 ChatEntity(
-                    id = packet.senderId,
-                    name = packet.senderName,
-                    type = ChatType.PRIVATE,
-                    lastMessage = "[File] ${fileMeta?.fileName ?: ""}",
+                    id = targetChatId,
+                    name = if (targetChatId == "PUBLIC_CHANNEL") "Canal Público" else packet.senderName,
+                    type = if (targetChatId == "PUBLIC_CHANNEL") ChatType.CHANNEL else ChatType.PRIVATE,
+                    lastMessage = "📎 ${fileMeta?.fileName ?: "Archivo"}",
                     lastMessageTimestamp = packet.timestamp
                 )
             )
         } else {
             chatDao.insertChat(
                 chat.copy(
-                    lastMessage = "[File] ${fileMeta?.fileName ?: ""}",
+                    lastMessage = "📎 ${fileMeta?.fileName ?: "Archivo"}",
                     lastMessageTimestamp = packet.timestamp
                 )
             )
@@ -188,7 +219,7 @@ class MessagingRepository @Inject constructor(
         )
         
         if (isChannel) {
-            meshManager.sendPacket(packet) // Broadcast
+            meshManager.sendPacket(packet)
         } else {
             val connectedNodes = meshManager.connectedNodes.value
             val targetEndpoint = connectedNodes.values.find { it.userId == chatId }?.endpointId
@@ -247,6 +278,28 @@ class MessagingRepository @Inject constructor(
             else -> MessageType.FILE
         }
 
+        // Compress and encode file to Base64
+        val base64Content: String
+        try {
+            val rawBytes = if (finalMimeType.startsWith("image/")) {
+                compressImage(uri, maxWidth = 1024, quality = 70)
+            } else {
+                readFileBytes(uri)
+            }
+            
+            if (rawBytes == null || rawBytes.isEmpty()) {
+                android.util.Log.e("MessagingRepository", "Failed to read file bytes")
+                return
+            }
+            
+            base64Content = Base64.encodeToString(rawBytes, Base64.NO_WRAP)
+            fileSize = rawBytes.size.toLong()
+            android.util.Log.d("MessagingRepository", "Encoded file to Base64: ${rawBytes.size} bytes -> ${base64Content.length} chars")
+        } catch (e: Exception) {
+            android.util.Log.e("MessagingRepository", "Error encoding file to Base64", e)
+            return
+        }
+
         val messageEntity = MessageEntity(
             id = UUID.randomUUID().toString(),
             chatId = chatId,
@@ -264,29 +317,79 @@ class MessagingRepository @Inject constructor(
         val chat = chatDao.getChatById(chatId)
         if (chat != null) {
             chatDao.insertChat(chat.copy(
-                lastMessage = "[File] $fileName",
+                lastMessage = "📎 $fileName",
                 lastMessageTimestamp = timestamp
             ))
         }
 
+        val isChannel = chatId == "PUBLIC_CHANNEL"
         val packet = MeshPacket(
             senderId = userId,
             senderName = username,
+            recipientId = if (isChannel) null else chatId,
             type = PacketType.FILE_TRANSFER,
-            content = "[File]",
+            content = base64Content,
             timestamp = timestamp,
             fileMetadata = FileMetadata(0, fileName, finalMimeType, fileSize)
         )
-        
-        val isChannel = chatId == "PUBLIC_CHANNEL"
+
         if (isChannel) {
-            meshManager.sendFile(uri, packet, null)
+            meshManager.sendPacket(packet, null)
         } else {
             val connectedNodes = meshManager.connectedNodes.value
             val targetEndpoint = connectedNodes.values.find { it.userId == chatId }?.endpointId
-            if (targetEndpoint != null) {
-                meshManager.sendFile(uri, packet, targetEndpoint)
+            meshManager.sendPacket(packet, targetEndpoint)
+        }
+    }
+
+    private fun compressImage(uri: android.net.Uri, maxWidth: Int, quality: Int): ByteArray? {
+        return try {
+            val inputStream = context.contentResolver.openInputStream(uri) ?: return null
+            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeStream(inputStream, null, options)
+            inputStream.close()
+
+            val originalWidth = options.outWidth
+            val originalHeight = options.outHeight
+            var sampleSize = 1
+            while (originalWidth / sampleSize > maxWidth * 2 || originalHeight / sampleSize > maxWidth * 2) {
+                sampleSize *= 2
             }
+
+            val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+            val inputStream2 = context.contentResolver.openInputStream(uri) ?: return null
+            val bitmap = BitmapFactory.decodeStream(inputStream2, null, decodeOptions)
+            inputStream2.close()
+
+            if (bitmap == null) return null
+
+            val scaledBitmap = if (bitmap.width > maxWidth) {
+                val ratio = maxWidth.toFloat() / bitmap.width
+                val newHeight = (bitmap.height * ratio).toInt()
+                Bitmap.createScaledBitmap(bitmap, maxWidth, newHeight, true).also {
+                    if (it != bitmap) bitmap.recycle()
+                }
+            } else {
+                bitmap
+            }
+
+            val outputStream = ByteArrayOutputStream()
+            scaledBitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+            scaledBitmap.recycle()
+
+            outputStream.toByteArray()
+        } catch (e: Exception) {
+            android.util.Log.e("MessagingRepository", "Image compression failed", e)
+            readFileBytes(uri)
+        }
+    }
+
+    private fun readFileBytes(uri: android.net.Uri): ByteArray? {
+        return try {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        } catch (e: Exception) {
+            android.util.Log.e("MessagingRepository", "Read file bytes failed", e)
+            null
         }
     }
 }

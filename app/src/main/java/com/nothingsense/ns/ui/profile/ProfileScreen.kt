@@ -55,7 +55,7 @@ fun ProfileScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Mi Perfil Matkii", fontWeight = FontWeight.Bold) },
+                title = { Text("Mi Perfil", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.back))
@@ -204,7 +204,7 @@ fun ProfileScreen(
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
-                            text = "Identidad Criptográfica Mesh",
+                            text = "Identidad Criptográfica",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )

@@ -3,19 +3,9 @@ package com.nothingsense.ns.network
 import android.content.Context
 import android.util.Log
 import com.google.android.gms.nearby.Nearby
-import com.google.android.gms.nearby.connection.AdvertisingOptions
-import com.google.android.gms.nearby.connection.ConnectionInfo
-import com.google.android.gms.nearby.connection.ConnectionLifecycleCallback
-import com.google.android.gms.nearby.connection.ConnectionResolution
-import com.google.android.gms.nearby.connection.ConnectionsClient
-import com.google.android.gms.nearby.connection.DiscoveredEndpointInfo
-import com.google.android.gms.nearby.connection.DiscoveryOptions
-import com.google.android.gms.nearby.connection.EndpointDiscoveryCallback
-import com.google.android.gms.nearby.connection.Payload
-import com.google.android.gms.nearby.connection.PayloadCallback
-import com.google.android.gms.nearby.connection.PayloadTransferUpdate
-import com.google.android.gms.nearby.connection.Strategy
+import com.google.android.gms.nearby.connection.*
 import com.nothingsense.ns.data.identity.IdentityManager
+import com.nothingsense.ns.network.model.FileMetadata
 import com.nothingsense.ns.network.model.MeshNode
 import com.nothingsense.ns.network.model.MeshPacket
 import com.nothingsense.ns.network.model.PacketType
@@ -23,16 +13,12 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -60,8 +46,10 @@ class MeshManager @Inject constructor(
     private val _peerConnectedEvent = MutableSharedFlow<MeshNode>(extraBufferCapacity = 32)
     val peerConnectedEvent: SharedFlow<MeshNode> = _peerConnectedEvent.asSharedFlow()
 
-    private val pendingFilePackets = java.util.concurrent.ConcurrentHashMap<Long, MeshPacket>()
-    private val pendingFilePayloads = java.util.concurrent.ConcurrentHashMap<Long, Payload.File>()
+    private val pendingFilePacketsQueue = ConcurrentLinkedQueue<MeshPacket>()
+    private val pendingFilePayloads = ConcurrentHashMap<Long, Payload.File>()
+    private val completedPayloadStatus = ConcurrentHashMap<Long, Boolean>()
+    private val seenPacketIds = java.util.Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
 
     fun startMesh() {
         if (isMeshStarted) return
@@ -211,8 +199,6 @@ class MeshManager @Inject constructor(
         }
     }
 
-    private val seenPacketIds = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<String, Boolean>())
-
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
             when (payload.type) {
@@ -233,7 +219,7 @@ class MeshManager @Inject constructor(
                     if (file != null) {
                         pendingFilePayloads[payload.id] = file
                         Log.d(TAG, "File payload received with ID: ${payload.id}")
-                        checkAndCompleteFileTransfer(payload.id)
+                        tryProcessFileQueue()
                     }
                 }
                 else -> {}
@@ -243,7 +229,8 @@ class MeshManager @Inject constructor(
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
             if (update.status == PayloadTransferUpdate.Status.SUCCESS) {
                 Log.d(TAG, "Payload transfer success for ID: ${update.payloadId}")
-                checkAndCompleteFileTransfer(update.payloadId)
+                completedPayloadStatus[update.payloadId] = true
+                tryProcessFileQueue()
             }
         }
     }
@@ -254,73 +241,78 @@ class MeshManager @Inject constructor(
             return
         }
 
-        val currentUserId = identityManager.getOrCreateUserId()
-        val isForMe = packet.recipientId == null || packet.recipientId == currentUserId
+        scope.launch(Dispatchers.IO) {
+            val currentUserId = identityManager.getOrCreateUserId()
+            val isForMe = packet.recipientId == null || packet.recipientId == currentUserId
 
-        if (isForMe) {
-            if (packet.type == PacketType.FILE_TRANSFER && packet.fileMetadata != null) {
-                pendingFilePackets[packet.fileMetadata.fileId] = packet
-                checkAndCompleteFileTransfer(packet.fileMetadata.fileId)
-            } else {
-                _incomingPackets.tryEmit(packet)
+            if (isForMe) {
+                if (packet.type == PacketType.FILE_TRANSFER && packet.fileMetadata != null) {
+                    pendingFilePacketsQueue.add(packet)
+                    tryProcessFileQueue()
+                } else {
+                    _incomingPackets.tryEmit(packet)
+                }
             }
-        }
 
-        // Multi-hop Routing Relay
-        if (packet.ttl > 1 && packet.senderId != currentUserId) {
-            val relayedPacket = packet.copy(
-                ttl = packet.ttl - 1,
-                hopCount = packet.hopCount + 1
-            )
-            val otherEndpoints = _connectedNodes.value.keys.filter { it != endpointId }
-            if (otherEndpoints.isNotEmpty()) {
-                try {
-                    val json = Json.encodeToString(relayedPacket)
-                    val payload = Payload.fromBytes(json.toByteArray())
-                    connectionsClient.sendPayload(otherEndpoints, payload)
-                    Log.d(TAG, "Relayed packet ${packet.packetId} to ${otherEndpoints.size} nodes (Hops: ${relayedPacket.hopCount})")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error relaying packet", e)
+            // Multi-hop Routing Relay
+            if (packet.ttl > 1 && packet.senderId != currentUserId) {
+                val relayedPacket = packet.copy(
+                    ttl = packet.ttl - 1,
+                    hopCount = packet.hopCount + 1
+                )
+                val otherEndpoints = _connectedNodes.value.keys.filter { it != endpointId }
+                if (otherEndpoints.isNotEmpty()) {
+                    try {
+                        val json = Json.encodeToString(relayedPacket)
+                        val payload = Payload.fromBytes(json.toByteArray())
+                        connectionsClient.sendPayload(otherEndpoints, payload)
+                        Log.d(TAG, "Relayed packet ${packet.packetId} to ${otherEndpoints.size} nodes (Hops: ${relayedPacket.hopCount})")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error relaying packet", e)
+                    }
                 }
             }
         }
     }
 
-    private fun checkAndCompleteFileTransfer(payloadId: Long) {
-        val packet = pendingFilePackets[payloadId]
-        val filePayload = pendingFilePayloads[payloadId]
-        if (packet != null && filePayload != null) {
-            scope.launch(Dispatchers.IO) {
-                try {
-                    val receivedDir = java.io.File(context.filesDir, "received_files")
-                    if (!receivedDir.exists()) receivedDir.mkdirs()
-                    
-                    val fileName = packet.fileMetadata?.fileName ?: "file_${System.currentTimeMillis()}"
-                    val destFile = java.io.File(receivedDir, "${System.currentTimeMillis()}_$fileName")
-                    
-                    val javaFile = filePayload.asJavaFile()
-                    if (javaFile != null && javaFile.exists()) {
-                        javaFile.copyTo(destFile, overwrite = true)
-                        javaFile.delete()
-                    } else {
-                        filePayload.asParcelFileDescriptor()?.let { pfd ->
-                            java.io.FileInputStream(pfd.fileDescriptor).use { input ->
-                                java.io.FileOutputStream(destFile).use { output ->
-                                    input.copyTo(output)
+    private fun tryProcessFileQueue() {
+        scope.launch(Dispatchers.IO) {
+            val completedId = completedPayloadStatus.keys.firstOrNull { completedPayloadStatus[it] == true }
+            if (completedId != null) {
+                val filePayload = pendingFilePayloads[completedId]
+                val packet = pendingFilePacketsQueue.poll()
+                if (filePayload != null && packet != null) {
+                    completedPayloadStatus.remove(completedId)
+                    pendingFilePayloads.remove(completedId)
+
+                    try {
+                        val receivedDir = java.io.File(context.filesDir, "received_files")
+                        if (!receivedDir.exists()) receivedDir.mkdirs()
+
+                        val fileName = packet.fileMetadata?.fileName ?: "file_${System.currentTimeMillis()}"
+                        val destFile = java.io.File(receivedDir, "${System.currentTimeMillis()}_$fileName")
+
+                        val javaFile = filePayload.asJavaFile()
+                        if (javaFile != null && javaFile.exists()) {
+                            javaFile.copyTo(destFile, overwrite = true)
+                            javaFile.delete()
+                        } else {
+                            filePayload.asParcelFileDescriptor()?.let { pfd ->
+                                java.io.FileInputStream(pfd.fileDescriptor).use { input ->
+                                    java.io.FileOutputStream(destFile).use { output ->
+                                        input.copyTo(output)
+                                    }
                                 }
                             }
                         }
+
+                        val savedUri = android.net.Uri.fromFile(destFile).toString()
+                        val finalPacket = packet.copy(content = savedUri)
+                        _incomingPackets.tryEmit(finalPacket)
+                        Log.d(TAG, "Successfully processed incoming file to $savedUri")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed saving received file payload", e)
                     }
-                    
-                    val savedUri = android.net.Uri.fromFile(destFile).toString()
-                    val finalPacket = packet.copy(content = savedUri)
-                    _incomingPackets.tryEmit(finalPacket)
-                    Log.d(TAG, "Successfully processed incoming file to $savedUri")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed saving received file payload", e)
-                } finally {
-                    pendingFilePackets.remove(payloadId)
-                    pendingFilePayloads.remove(payloadId)
                 }
             }
         }

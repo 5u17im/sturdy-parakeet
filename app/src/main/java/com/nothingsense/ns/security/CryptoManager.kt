@@ -22,11 +22,13 @@ import javax.inject.Singleton
 class CryptoManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private const val ANDROID_KEYSTORE = "AndroidKeyStore"
-    private const val KEY_ALIAS = "nosense_identity_key"
-    private const val TRANSFORMATION = "AES/GCM/NoPadding"
-    private const val GCM_IV_LENGTH = 12
-    private const val GCM_TAG_LENGTH = 128
+    companion object {
+        private const val ANDROID_KEYSTORE = "AndroidKeyStore"
+        private const val KEY_ALIAS = "nosense_identity_key"
+        private const val TRANSFORMATION = "AES/GCM/NoPadding"
+        private const val GCM_IV_LENGTH = 12
+        private const val GCM_TAG_LENGTH = 128
+    }
 
     private val keyStore: KeyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply {
         load(null)

@@ -35,7 +35,7 @@ fun SettingsScreen(
     val clipboardManager = LocalClipboardManager.current
     var isBiometricEnabled by remember { mutableStateOf(false) }
     var isAutoDownloadEnabled by remember { mutableStateOf(true) }
-    var selectedTheme by remember { mutableStateOf("Matkii Electric Dark") }
+    var selectedTheme by remember { mutableStateOf("NoSense Dark") }
     var showCopiedToast by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -49,7 +49,7 @@ fun SettingsScreen(
                             letterSpacing = (-0.5).sp
                         )
                         Text(
-                            text = "Ajustes, privacidad y apariencia Matkii",
+                            text = "Ajustes, privacidad y apariencia",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                         )
@@ -180,14 +180,14 @@ fun SettingsScreen(
             }
 
             // Customization & Appearance Section
-            SettingsSectionHeader("PERSONALIZACIÓN Y APARIENCIA MATKII")
+            SettingsSectionHeader("PERSONALIZACIÓN Y APARIENCIA")
             SettingsSwitchRow(
                 icon = Icons.Rounded.Palette,
                 title = "Tema de Interfaz",
                 subtitle = selectedTheme,
-                checked = selectedTheme == "Matkii Electric Dark",
+                checked = selectedTheme == "NoSense Dark",
                 onCheckedChange = {
-                    selectedTheme = if (it) "Matkii Electric Dark" else "Modo Claro"
+                    selectedTheme = if (it) "NoSense Dark" else "Modo Claro"
                 }
             )
 

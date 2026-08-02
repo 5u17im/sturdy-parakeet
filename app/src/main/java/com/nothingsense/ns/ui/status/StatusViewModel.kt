@@ -1,5 +1,6 @@
 package com.nothingsense.ns.ui.status
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nothingsense.ns.data.identity.IdentityManager
@@ -21,9 +22,9 @@ class StatusViewModel @Inject constructor(
     val activeStatuses: StateFlow<List<StatusEntity>> = repository.getActiveStatuses()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun postStatus(content: String) {
+    fun postStatus(content: String, imageUri: Uri? = null) {
         viewModelScope.launch {
-            repository.postStatus(content)
+            repository.postStatus(content, imageUri)
         }
     }
 }

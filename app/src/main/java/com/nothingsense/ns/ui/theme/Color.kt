@@ -2,7 +2,7 @@ package com.nothingsense.ns.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Matkii Vibrant Energetic Color System
+// NoSense Vibrant Energetic Color System
 // Primary: Electric Violet
 val PrimaryLight = Color(0xFF6C5CE7)
 val OnPrimaryLight = Color(0xFFFFFFFF)

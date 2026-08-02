@@ -10,5 +10,6 @@ data class StatusEntity(
     val username: String,
     val content: String,
     val timestamp: Long,
-    val expiresAt: Long
+    val expiresAt: Long,
+    val imageUri: String? = null
 )

@@ -1,5 +1,8 @@
 package com.nothingsense.ns.ui.status
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -17,6 +20,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.FormatQuote
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,6 +28,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -32,11 +38,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.nothingsense.ns.R
 import com.nothingsense.ns.data.local.entities.StatusEntity
 import com.nothingsense.ns.ui.theme.PrimaryLight
 import com.nothingsense.ns.ui.theme.SecondaryLight
-import com.nothingsense.ns.ui.theme.TertiaryLight
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -48,7 +55,14 @@ fun StatusScreen(
     val statuses by viewModel.activeStatuses.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var statusText by remember { mutableStateOf("") }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var selectedStatusIndex by remember { mutableStateOf<Int?>(null) }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        selectedImageUri = uri
+    }
 
     val gradientBorders = listOf(
         Brush.linearGradient(listOf(Color(0xFF6C5CE7), Color(0xFF00B894))),
@@ -97,7 +111,7 @@ fun StatusScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Horizontal Matkii Stories Carousel
+            // Horizontal Stories Carousel
             Column(modifier = Modifier.padding(vertical = 12.dp)) {
                 Text(
                     text = "HISTORIAS RECIENTES",
@@ -151,6 +165,7 @@ fun StatusScreen(
                     items(statuses.size) { index ->
                         val status = statuses[index]
                         val borderGradient = gradientBorders[index % gradientBorders.size]
+                        val hasImage = status.imageUri != null
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier.clickable { selectedStatusIndex = index }
@@ -161,18 +176,32 @@ fun StatusScreen(
                                     .border(2.5.dp, borderGradient, CircleShape)
                                     .padding(3.dp)
                             ) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    modifier = Modifier.fillMaxSize()
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(
-                                            text = status.username.take(1).uppercase(),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
+                                if (hasImage) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(status.imageUri)
+                                            .crossfade(true)
+                                            .build(),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(CircleShape)
+                                    )
+                                } else {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = status.username.take(1).uppercase(),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -190,7 +219,7 @@ fun StatusScreen(
                 }
             }
 
-            Divider(
+            HorizontalDivider(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                 modifier = Modifier.padding(vertical = 4.dp)
             )
@@ -257,7 +286,7 @@ fun StatusScreen(
         }
     }
 
-    // Full-Screen Interactive Matkii Story Viewer
+    // Full-Screen Interactive Story Viewer
     selectedStatusIndex?.let { index ->
         if (index in statuses.indices) {
             StatusStoryViewer(
@@ -271,22 +300,86 @@ fun StatusScreen(
     // Create New Status Dialog
     if (showAddDialog) {
         AlertDialog(
-            onDismissRequest = { showAddDialog = false },
+            onDismissRequest = {
+                showAddDialog = false
+                selectedImageUri = null
+                statusText = ""
+            },
             shape = RoundedCornerShape(24.dp),
             title = {
                 Text(
-                    text = "Publicar Historia Mesh",
+                    text = "Publicar Historia",
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Column {
                     Text(
-                        text = "Tu historia se transmitirá a todos los nodos conectados en la red mesh y caducará en 24 horas.",
+                        text = "Tu historia se transmitirá a todos los nodos conectados y caducará en 24 horas.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
+
+                    // Image preview
+                    if (selectedImageUri != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable { imagePickerLauncher.launch("image/*") }
+                        ) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(selectedImageUri)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "Imagen seleccionada",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            // Remove button
+                            IconButton(
+                                onClick = { selectedImageUri = null },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(4.dp)
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color.Black.copy(alpha = 0.5f)
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Close,
+                                        contentDescription = "Quitar imagen",
+                                        tint = Color.White,
+                                        modifier = Modifier.padding(4.dp).size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                    }
+
+                    // Image picker button
+                    if (selectedImageUri == null) {
+                        OutlinedButton(
+                            onClick = { imagePickerLauncher.launch("image/*") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                Icons.Rounded.Image,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Adjuntar foto")
+                        }
+                        Spacer(Modifier.height(12.dp))
+                    }
+
                     TextField(
                         value = statusText,
                         onValueChange = { statusText = it },
@@ -306,9 +399,13 @@ fun StatusScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        if (statusText.isNotBlank()) {
-                            viewModel.postStatus(statusText)
+                        if (statusText.isNotBlank() || selectedImageUri != null) {
+                            viewModel.postStatus(
+                                content = statusText.ifBlank { "📷" },
+                                imageUri = selectedImageUri
+                            )
                             statusText = ""
+                            selectedImageUri = null
                             showAddDialog = false
                         }
                     },
@@ -318,7 +415,11 @@ fun StatusScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAddDialog = false }) {
+                TextButton(onClick = {
+                    showAddDialog = false
+                    selectedImageUri = null
+                    statusText = ""
+                }) {
                     Text(stringResource(R.string.cancel))
                 }
             }
@@ -336,49 +437,66 @@ fun StatusCardItem(status: StatusEntity, accentColor: Color, onClick: () -> Unit
             .fillMaxWidth()
             .clickable { onClick() }
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(14.dp)
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = accentColor.copy(alpha = 0.15f),
-                modifier = Modifier.size(50.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = status.username.take(1).uppercase(),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = accentColor
-                    )
-                }
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = status.username,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(status.timestamp)),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                }
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = status.content,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+        Column {
+            // Image thumbnail if present
+            if (status.imageUri != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(status.imageUri)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp)
+                        .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                 )
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(14.dp)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = accentColor.copy(alpha = 0.15f),
+                    modifier = Modifier.size(50.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = status.username.take(1).uppercase(),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = accentColor
+                        )
+                    }
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = status.username,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(status.timestamp)),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = status.content,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
@@ -393,6 +511,10 @@ fun StatusStoryViewer(
     var currentIndex by remember { mutableStateOf(initialIndex) }
     val currentStatus = statuses.getOrNull(currentIndex) ?: return
     val progress = remember { Animatable(0f) }
+    val hasImage = currentStatus.imageUri != null
+
+    // Longer display time for image statuses
+    val displayDuration = if (hasImage) 7000 else 5000
 
     val backgroundGradients = listOf(
         Brush.verticalGradient(listOf(Color(0xFF6C5CE7), Color(0xFF2D3436))),
@@ -406,7 +528,7 @@ fun StatusStoryViewer(
         progress.snapTo(0f)
         progress.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 5000, easing = LinearEasing)
+            animationSpec = tween(durationMillis = displayDuration, easing = LinearEasing)
         )
         if (currentIndex < statuses.size - 1) {
             currentIndex += 1
@@ -424,6 +546,25 @@ fun StatusStoryViewer(
                 .fillMaxSize()
                 .background(currentGradient)
         ) {
+            // Full-screen image background if present
+            if (hasImage) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(currentStatus.imageUri)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                // Dark overlay for readability
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.35f))
+                )
+            }
+
             // Top Navigation & Progress Indicator Bars
             Column(
                 modifier = Modifier
@@ -492,36 +633,55 @@ fun StatusStoryViewer(
 
             // Center Content Display
             Box(
-                contentAlignment = Alignment.Center,
+                contentAlignment = if (hasImage) Alignment.BottomCenter else Alignment.Center,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 32.dp)
             ) {
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = Color.Black.copy(alpha = 0.3f),
-                    modifier = Modifier.padding(vertical = 64.dp)
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.padding(28.dp)
+                if (hasImage && currentStatus.content.isNotBlank() && currentStatus.content != "📷") {
+                    // Text overlay on image status
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.Black.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(bottom = 80.dp)
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                Icons.Rounded.FormatQuote,
-                                contentDescription = null,
-                                modifier = Modifier.size(40.dp),
-                                tint = Color.White.copy(alpha = 0.6f)
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                text = currentStatus.content,
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                textAlign = TextAlign.Center,
-                                lineHeight = 34.sp
-                            )
+                        Text(
+                            text = currentStatus.content,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)
+                        )
+                    }
+                } else if (!hasImage) {
+                    // Text-only status
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = Color.Black.copy(alpha = 0.3f),
+                        modifier = Modifier.padding(vertical = 64.dp)
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(28.dp)
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    Icons.Rounded.FormatQuote,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(40.dp),
+                                    tint = Color.White.copy(alpha = 0.6f)
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    text = currentStatus.content,
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 34.sp
+                                )
+                            }
                         }
                     }
                 }
