@@ -33,6 +33,9 @@ class ChatViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val connectedNodes: StateFlow<Map<String, MeshNode>> = meshManager.connectedNodes
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
     val userId: StateFlow<String?> = identityManager.userIdFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 

@@ -18,6 +18,7 @@ import com.google.android.gms.nearby.connection.Strategy
 import com.nothingsense.ns.data.identity.IdentityManager
 import com.nothingsense.ns.network.model.MeshNode
 import com.nothingsense.ns.network.model.MeshPacket
+import com.nothingsense.ns.network.model.PacketType
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +56,12 @@ class MeshManager @Inject constructor(
 
     private val _incomingPackets = MutableSharedFlow<MeshPacket>(extraBufferCapacity = 64)
     val incomingPackets: SharedFlow<MeshPacket> = _incomingPackets.asSharedFlow()
+
+    private val _peerConnectedEvent = MutableSharedFlow<MeshNode>(extraBufferCapacity = 32)
+    val peerConnectedEvent: SharedFlow<MeshNode> = _peerConnectedEvent.asSharedFlow()
+
+    private val pendingFilePackets = java.util.concurrent.ConcurrentHashMap<Long, MeshPacket>()
+    private val pendingFilePayloads = java.util.concurrent.ConcurrentHashMap<Long, Payload.File>()
 
     fun startMesh() {
         if (isMeshStarted) return
@@ -128,15 +135,22 @@ class MeshManager @Inject constructor(
         sendPayload(payload, targetEndpointId)
     }
 
-    fun sendFile(fileUri: android.net.Uri, packet: MeshPacket, targetEndpointId: String) {
+    fun sendFile(fileUri: android.net.Uri, packet: MeshPacket, targetEndpointId: String? = null) {
         try {
-            val filePayload = Payload.fromFile(context.contentResolver.openFileDescriptor(fileUri, "r")!!)
-            val metadataPayload = Payload.fromBytes(Json.encodeToString(packet).toByteArray())
+            val pfd = context.contentResolver.openFileDescriptor(fileUri, "r") ?: return
+            val filePayload = Payload.fromFile(pfd)
             
-            connectionsClient.sendPayload(targetEndpointId, metadataPayload)
-            connectionsClient.sendPayload(targetEndpointId, filePayload)
+            val updatedPacket = packet.copy(
+                fileMetadata = packet.fileMetadata?.copy(fileId = filePayload.id)
+            )
+            val json = Json.encodeToString(updatedPacket)
+            val metadataPayload = Payload.fromBytes(json.toByteArray())
+
+            sendPayload(metadataPayload, targetEndpointId)
+            sendPayload(filePayload, targetEndpointId)
+            Log.d(TAG, "Sent file payload with ID: ${filePayload.id} and metadata")
         } catch (e: Exception) {
-            Log.e(TAG, "Error sending file", e)
+            Log.e(TAG, "Error sending file payload", e)
         }
     }
 
@@ -158,8 +172,10 @@ class MeshManager @Inject constructor(
             val userId = parts.getOrNull(0) ?: "unknown"
             val username = parts.getOrNull(1) ?: "Unknown"
             
-            _discoveredNodes.update { it + (endpointId to MeshNode(endpointId, userId, username)) }
+            val node = MeshNode(endpointId, userId, username)
+            _discoveredNodes.update { it + (endpointId to node) }
             
+            // Auto-connect to discovered nodes
             connectToNode(endpointId)
         }
 
@@ -180,7 +196,9 @@ class MeshManager @Inject constructor(
                 Log.d(TAG, "Connection successful: $endpointId")
                 val node = _discoveredNodes.value[endpointId]
                 if (node != null) {
-                    _connectedNodes.update { it + (endpointId to node.copy(isConnected = true)) }
+                    val connectedNode = node.copy(isConnected = true)
+                    _connectedNodes.update { it + (endpointId to connectedNode) }
+                    _peerConnectedEvent.tryEmit(connectedNode)
                 }
             } else {
                 Log.e(TAG, "Connection failed: $endpointId, status: ${result.status}")
@@ -195,19 +213,81 @@ class MeshManager @Inject constructor(
 
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
-            payload.asBytes()?.let { bytes ->
-                try {
-                    val json = String(bytes)
-                    val packet = Json.decodeFromString<MeshPacket>(json)
-                    _incomingPackets.tryEmit(packet)
-                    Log.d(TAG, "Packet received from $endpointId: $packet")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error decoding packet", e)
+            when (payload.type) {
+                Payload.Type.BYTES -> {
+                    payload.asBytes()?.let { bytes ->
+                        try {
+                            val json = String(bytes)
+                            val packet = Json.decodeFromString<MeshPacket>(json)
+                            Log.d(TAG, "Packet received from $endpointId: $packet")
+                            if (packet.type == PacketType.FILE_TRANSFER && packet.fileMetadata != null) {
+                                pendingFilePackets[packet.fileMetadata.fileId] = packet
+                                checkAndCompleteFileTransfer(packet.fileMetadata.fileId)
+                            } else {
+                                _incomingPackets.tryEmit(packet)
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error decoding packet bytes", e)
+                        }
+                    }
                 }
+                Payload.Type.FILE -> {
+                    val file = payload.asFile()
+                    if (file != null) {
+                        pendingFilePayloads[payload.id] = file
+                        Log.d(TAG, "File payload received with ID: ${payload.id}")
+                        checkAndCompleteFileTransfer(payload.id)
+                    }
+                }
+                else -> {}
             }
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
+            if (update.status == PayloadTransferUpdate.Status.SUCCESS) {
+                Log.d(TAG, "Payload transfer success for ID: ${update.payloadId}")
+                checkAndCompleteFileTransfer(update.payloadId)
+            }
+        }
+    }
+
+    private fun checkAndCompleteFileTransfer(payloadId: Long) {
+        val packet = pendingFilePackets[payloadId]
+        val filePayload = pendingFilePayloads[payloadId]
+        if (packet != null && filePayload != null) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val receivedDir = java.io.File(context.filesDir, "received_files")
+                    if (!receivedDir.exists()) receivedDir.mkdirs()
+                    
+                    val fileName = packet.fileMetadata?.fileName ?: "file_${System.currentTimeMillis()}"
+                    val destFile = java.io.File(receivedDir, "${System.currentTimeMillis()}_$fileName")
+                    
+                    val javaFile = filePayload.asJavaFile()
+                    if (javaFile != null && javaFile.exists()) {
+                        javaFile.copyTo(destFile, overwrite = true)
+                        javaFile.delete()
+                    } else {
+                        filePayload.asParcelFileDescriptor()?.let { pfd ->
+                            java.io.FileInputStream(pfd.fileDescriptor).use { input ->
+                                java.io.FileOutputStream(destFile).use { output ->
+                                    input.copyTo(output)
+                                }
+                            }
+                        }
+                    }
+                    
+                    val savedUri = android.net.Uri.fromFile(destFile).toString()
+                    val finalPacket = packet.copy(content = savedUri)
+                    _incomingPackets.tryEmit(finalPacket)
+                    Log.d(TAG, "Successfully processed incoming file to $savedUri")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed saving received file payload", e)
+                } finally {
+                    pendingFilePackets.remove(payloadId)
+                    pendingFilePayloads.remove(payloadId)
+                }
+            }
         }
     }
 }

@@ -7,12 +7,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nothingsense.ns.R
 import com.nothingsense.ns.data.identity.IdentityManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
@@ -54,14 +56,14 @@ fun OnboardingScreen(
             )
             Spacer(Modifier.height(24.dp))
             Text(
-                "Welcome to NoSense",
+                stringResource(R.string.welcome),
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Your decentralized, offline mesh messaging app.",
+                stringResource(R.string.onboarding_desc),
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -70,7 +72,7 @@ fun OnboardingScreen(
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it },
-                label = { Text("Choose a Username") },
+                label = { Text(stringResource(R.string.choose_username)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 shape = MaterialTheme.shapes.medium
@@ -87,7 +89,7 @@ fun OnboardingScreen(
                 shape = MaterialTheme.shapes.medium,
                 enabled = username.isNotBlank()
             ) {
-                Text("Get Started")
+                Text(stringResource(R.string.get_started))
             }
         }
     }

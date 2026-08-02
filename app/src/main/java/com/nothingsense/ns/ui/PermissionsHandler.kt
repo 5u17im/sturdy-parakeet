@@ -12,8 +12,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
+import com.nothingsense.ns.R
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -52,13 +54,16 @@ fun NearbyPermissionsHandler(
                 locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
     }
 
+    val bluetoothMessage = stringResource(R.string.enable_bluetooth)
+    val locationMessage = stringResource(R.string.enable_location)
+
     LaunchedEffect(permissionState.allPermissionsGranted, isBluetoothEnabled, isLocationEnabled) {
         if (permissionState.allPermissionsGranted) {
             if (!isBluetoothEnabled) {
-                hardwareMessage = "Bluetooth is required for mesh networking. Please enable it."
+                hardwareMessage = bluetoothMessage
                 showHardwareDialog = true
             } else if (!isLocationEnabled) {
-                hardwareMessage = "Location services are required for discovery. Please enable GPS."
+                hardwareMessage = locationMessage
                 showHardwareDialog = true
             } else {
                 onPermissionsGranted()
@@ -71,24 +76,24 @@ fun NearbyPermissionsHandler(
     if (showHardwareDialog) {
         AlertDialog(
             onDismissRequest = { showHardwareDialog = false },
-            title = { Text("Hardware Required") },
+            title = { Text(stringResource(R.string.hardware_required)) },
             text = { Text(hardwareMessage) },
             confirmButton = {
                 TextButton(onClick = {
                     showHardwareDialog = false
-                    val intent = if (hardwareMessage.contains("Bluetooth")) {
+                    val intent = if (hardwareMessage.contains("Bluetooth") || hardwareMessage.contains("mesh")) {
                         Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
                     } else {
                         Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
                     }
                     context.startActivity(intent)
                 }) {
-                    Text("Settings")
+                    Text(stringResource(R.string.settings))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showHardwareDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )

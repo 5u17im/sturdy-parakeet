@@ -1,5 +1,8 @@
 package com.nothingsense.ns.data.repository
 
+import android.content.Context
+import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
 import com.nothingsense.ns.data.identity.IdentityManager
 import com.nothingsense.ns.data.local.dao.ChatDao
 import com.nothingsense.ns.data.local.dao.MessageDao
@@ -11,11 +14,11 @@ import com.nothingsense.ns.network.MeshManager
 import com.nothingsense.ns.network.model.FileMetadata
 import com.nothingsense.ns.network.model.MeshPacket
 import com.nothingsense.ns.network.model.PacketType
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
@@ -23,6 +26,7 @@ import javax.inject.Singleton
 
 @Singleton
 class MessagingRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val chatDao: ChatDao,
     private val messageDao: MessageDao,
     private val meshManager: MeshManager,
@@ -32,12 +36,21 @@ class MessagingRepository @Inject constructor(
 
     init {
         observeIncomingPackets()
+        observePeerConnections()
     }
 
     private fun observeIncomingPackets() {
         scope.launch {
             meshManager.incomingPackets.collect { packet ->
                 handleIncomingPacket(packet)
+            }
+        }
+    }
+
+    private fun observePeerConnections() {
+        scope.launch {
+            meshManager.peerConnectedEvent.collect { node ->
+                createPrivateChat(node.userId, node.username)
             }
         }
     }
@@ -58,9 +71,47 @@ class MessagingRepository @Inject constructor(
     }
 
     private suspend fun handleIncomingFile(packet: MeshPacket) {
-        // For simplicity, we just save a placeholder message for now
-        // In a real app, we'd wait for the file payload and update the URI
-        saveMessage(packet, packet.senderId, packet.senderName, isFile = true)
+        val fileMeta = packet.fileMetadata
+        val mimeType = fileMeta?.fileType ?: "application/octet-stream"
+        val messageType = when {
+            mimeType.startsWith("image/") -> MessageType.IMAGE
+            mimeType.startsWith("video/") -> MessageType.VIDEO
+            mimeType.startsWith("audio/") -> MessageType.AUDIO
+            else -> MessageType.FILE
+        }
+
+        val messageEntity = MessageEntity(
+            id = UUID.randomUUID().toString(),
+            chatId = packet.senderId,
+            senderId = packet.senderId,
+            text = fileMeta?.fileName ?: "Received File",
+            timestamp = packet.timestamp,
+            type = messageType,
+            fileUri = packet.content, // contains the saved local file Uri
+            fileType = mimeType,
+            fileName = fileMeta?.fileName ?: "File"
+        )
+
+        val chat = chatDao.getChatById(packet.senderId)
+        if (chat == null) {
+            chatDao.insertChat(
+                ChatEntity(
+                    id = packet.senderId,
+                    name = packet.senderName,
+                    type = ChatType.PRIVATE,
+                    lastMessage = "[File] ${fileMeta?.fileName ?: ""}",
+                    lastMessageTimestamp = packet.timestamp
+                )
+            )
+        } else {
+            chatDao.insertChat(
+                chat.copy(
+                    lastMessage = "[File] ${fileMeta?.fileName ?: ""}",
+                    lastMessageTimestamp = packet.timestamp
+                )
+            )
+        }
+        messageDao.insertMessage(messageEntity)
     }
 
     private suspend fun saveMessage(
@@ -164,12 +215,35 @@ class MessagingRepository @Inject constructor(
         val username = identityManager.getUsername()
         val timestamp = System.currentTimeMillis()
         
-        // Simplified mime type detection
-        val mimeType = "image/jpeg" // Should use contentResolver.getType(uri)
+        var fileName = "file_${System.currentTimeMillis()}"
+        var fileSize = 0L
+        var mimeType: String? = context.contentResolver.getType(uri)
+
+        try {
+            context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (nameIndex != -1) cursor.getString(nameIndex)?.let { fileName = it }
+                    if (sizeIndex != -1) fileSize = cursor.getLong(sizeIndex)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MessagingRepository", "Error querying file metadata", e)
+        }
+
+        if (mimeType == null) {
+            val extension = MimeTypeMap.getFileExtensionFromUrl(uri.toString())
+            if (extension != null) {
+                mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.lowercase())
+            }
+        }
+        val finalMimeType = mimeType ?: "application/octet-stream"
+
         val type = when {
-            mimeType.startsWith("image/") -> MessageType.IMAGE
-            mimeType.startsWith("video/") -> MessageType.VIDEO
-            mimeType.startsWith("audio/") -> MessageType.AUDIO
+            finalMimeType.startsWith("image/") -> MessageType.IMAGE
+            finalMimeType.startsWith("video/") -> MessageType.VIDEO
+            finalMimeType.startsWith("audio/") -> MessageType.AUDIO
             else -> MessageType.FILE
         }
 
@@ -177,15 +251,23 @@ class MessagingRepository @Inject constructor(
             id = UUID.randomUUID().toString(),
             chatId = chatId,
             senderId = userId,
-            text = "[File]",
+            text = fileName,
             timestamp = timestamp,
             type = type,
             fileUri = uri.toString(),
-            fileType = mimeType,
-            fileName = "file" // Should get real name
+            fileType = finalMimeType,
+            fileName = fileName
         )
         
         messageDao.insertMessage(messageEntity)
+
+        val chat = chatDao.getChatById(chatId)
+        if (chat != null) {
+            chatDao.insertChat(chat.copy(
+                lastMessage = "[File] $fileName",
+                lastMessageTimestamp = timestamp
+            ))
+        }
 
         val packet = MeshPacket(
             senderId = userId,
@@ -193,14 +275,18 @@ class MessagingRepository @Inject constructor(
             type = PacketType.FILE_TRANSFER,
             content = "[File]",
             timestamp = timestamp,
-            fileMetadata = FileMetadata(0, "file", mimeType, 0)
+            fileMetadata = FileMetadata(0, fileName, finalMimeType, fileSize)
         )
         
-        val connectedNodes = meshManager.connectedNodes.value
-        val targetEndpoint = connectedNodes.values.find { it.userId == chatId }?.endpointId
-        
-        if (targetEndpoint != null) {
-            meshManager.sendFile(uri, packet, targetEndpoint)
+        val isChannel = chatId == "PUBLIC_CHANNEL"
+        if (isChannel) {
+            meshManager.sendFile(uri, packet, null)
+        } else {
+            val connectedNodes = meshManager.connectedNodes.value
+            val targetEndpoint = connectedNodes.values.find { it.userId == chatId }?.endpointId
+            if (targetEndpoint != null) {
+                meshManager.sendFile(uri, packet, targetEndpoint)
+            }
         }
     }
 }

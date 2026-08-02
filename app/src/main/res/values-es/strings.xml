@@ -25,9 +25,15 @@
     <string name="join_public_channel">Unirse al Canal Público</string>
     <string name="no_channels">No te has unido a ningún canal</string>
     <string name="broadcast_desc">Transmitir a todos</string>
+    <string name="start_conversation">Empezar una conversación</string>
+    <string name="video">Video</string>
+    <string name="file">Archivo</string>
     <string name="hardware_required">Hardware Requerido</string>
+    <string name="enable_bluetooth">Se requiere Bluetooth para la red mesh. Por favor, actívalo.</string>
+    <string name="enable_location">Los servicios de ubicación son necesarios para el descubrimiento. Por favor, activa el GPS.</string>
     <string name="settings_title">Configuración</string>
     <string name="unique_id">ID Único</string>
     <string name="username">Nombre de usuario</string>
     <string name="save">Guardar</string>
+    <string name="connected_nearby">Conectado por Mesh</string>
 </resources>

@@ -25,9 +25,15 @@
     <string name="join_public_channel">Join Public Channel</string>
     <string name="no_channels">No channels joined</string>
     <string name="broadcast_desc">Broadcast to everyone</string>
+    <string name="start_conversation">Start a conversation</string>
+    <string name="video">Video</string>
+    <string name="file">File</string>
     <string name="hardware_required">Hardware Required</string>
+    <string name="enable_bluetooth">Bluetooth is required for mesh networking. Please enable it.</string>
+    <string name="enable_location">Location services are required for discovery. Please enable GPS.</string>
     <string name="settings_title">Settings</string>
     <string name="unique_id">Unique ID</string>
     <string name="username">Username</string>
     <string name="save">Save</string>
+    <string name="connected_nearby">Mesh Connected</string>
 </resources>

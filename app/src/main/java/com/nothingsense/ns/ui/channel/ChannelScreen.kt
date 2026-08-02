@@ -11,8 +11,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.nothingsense.ns.R
 import com.nothingsense.ns.data.local.entities.ChatEntity
 import com.nothingsense.ns.data.local.entities.ChatType
 import com.nothingsense.ns.ui.chat.ChatViewModel
@@ -30,9 +32,9 @@ fun ChannelScreen(
         modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("Channels", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.channels), fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
+                    containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.7f),
                 )
             )
         },
@@ -42,7 +44,7 @@ fun ChannelScreen(
                     onChannelClick(ChatEntity("PUBLIC_CHANNEL", "Public Channel", ChatType.CHANNEL, null, null))
                 },
                 icon = { Icon(Icons.Rounded.Campaign, null) },
-                text = { Text("Join Public Channel") }
+                text = { Text(stringResource(R.string.join_public_channel)) }
             )
         }
     ) { padding ->
@@ -51,7 +53,7 @@ fun ChannelScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Rounded.Groups, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.secondary)
                     Spacer(Modifier.height(16.dp))
-                    Text("No channels joined", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.no_channels), style = MaterialTheme.typography.bodyLarge)
                 }
             }
         } else {
@@ -62,7 +64,7 @@ fun ChannelScreen(
                 items(channels) { channel ->
                     ListItem(
                         headlineContent = { Text(channel.name, fontWeight = FontWeight.SemiBold) },
-                        supportingContent = { Text(channel.lastMessage ?: "Broadcast to everyone") },
+                        supportingContent = { Text(channel.lastMessage ?: stringResource(R.string.broadcast_desc)) },
                         leadingContent = {
                             Surface(
                                 shape = MaterialTheme.shapes.medium,

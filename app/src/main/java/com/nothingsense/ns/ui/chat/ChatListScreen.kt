@@ -1,9 +1,12 @@
 package com.nothingsense.ns.ui.chat
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Chat
 import androidx.compose.material.icons.rounded.Person
@@ -12,13 +15,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.nothingsense.ns.R
 import com.nothingsense.ns.data.local.entities.ChatEntity
 import com.nothingsense.ns.network.model.MeshNode
 import com.nothingsense.ns.ui.NearbyPermissionsHandler
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,7 +36,8 @@ fun ChatListScreen(
     onChatClick: (ChatEntity) -> Unit
 ) {
     val chats by viewModel.chats.collectAsState()
-    val nodes by viewModel.discoveredNodes.collectAsState()
+    val connectedNodes by viewModel.connectedNodes.collectAsState()
+    val discoveredNodes by viewModel.discoveredNodes.collectAsState()
     var showDiscoverDialog by remember { mutableStateOf(false) }
 
     NearbyPermissionsHandler {
@@ -38,35 +48,100 @@ fun ChatListScreen(
         modifier = Modifier.fillMaxSize(),
         topBar = {
             LargeTopAppBar(
-                title = { Text("NoSense", fontWeight = FontWeight.ExtraBold) },
+                title = {
+                    Column {
+                        Text(
+                            text = stringResource(R.string.app_name),
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = (-0.5).sp
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (connectedNodes.isNotEmpty()) Color(0xFF00B894) else MaterialTheme.colorScheme.outline)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = if (connectedNodes.isNotEmpty()) "${connectedNodes.size} peer(s) conectados" else "Mesh activo en segundo plano",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.largeTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp)
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(4.dp)
                 )
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showDiscoverDialog = true }) {
-                Icon(Icons.Rounded.Wifi, contentDescription = "Discover")
+            FloatingActionButton(
+                onClick = { showDiscoverDialog = true },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Icon(Icons.Rounded.Wifi, contentDescription = stringResource(R.string.discovered_nodes))
             }
         }
     ) { padding ->
         if (chats.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Rounded.Chat, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.secondary)
-                    Spacer(Modifier.height(16.dp))
-                    Text("No chats yet", style = MaterialTheme.typography.bodyLarge)
-                    Text("Connect to nearby nodes to start chatting", style = MaterialTheme.typography.bodyMedium)
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(24.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(72.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Rounded.Chat,
+                                    null,
+                                    modifier = Modifier.size(36.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            stringResource(R.string.no_chats),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Los dispositivos cercanos con NoSense se conectarán automáticamente sin necesidad de búsquedas manuales.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                    }
                 }
             }
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = padding
+                contentPadding = padding,
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 items(chats) { chat ->
-                    ChatItem(chat = chat, onClick = { onChatClick(chat) })
+                    val isOnline = connectedNodes.values.any { it.userId == chat.id }
+                    ChatItem(
+                        chat = chat,
+                        isOnline = isOnline,
+                        onClick = { onChatClick(chat) }
+                    )
                 }
             }
         }
@@ -75,29 +150,84 @@ fun ChatListScreen(
     if (showDiscoverDialog) {
         AlertDialog(
             onDismissRequest = { showDiscoverDialog = false },
-            title = { Text("Discovered Nodes") },
+            shape = RoundedCornerShape(24.dp),
+            title = {
+                Text(
+                    stringResource(R.string.discovered_nodes),
+                    fontWeight = FontWeight.Bold
+                )
+            },
             text = {
-                if (nodes.isEmpty()) {
-                    Text("Searching for nearby users...")
+                if (discoveredNodes.isEmpty()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Text(stringResource(R.string.searching), style = MaterialTheme.typography.bodyMedium)
+                    }
                 } else {
-                    LazyColumn {
-                        items(nodes) { node ->
-                            ListItem(
-                                headlineContent = { Text(node.username) },
-                                supportingContent = { Text(node.userId.take(8)) },
-                                leadingContent = { Icon(Icons.Rounded.Person, null) },
-                                modifier = Modifier.clickable {
-                                    viewModel.createChat(node)
-                                    showDiscoverDialog = false
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        items(discoveredNodes) { node ->
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        viewModel.createChat(node)
+                                        showDiscoverDialog = false
+                                    }
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(12.dp)
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = node.username.take(1).uppercase(),
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(node.username, fontWeight = FontWeight.Bold)
+                                        Text(
+                                            "ID: ${node.userId.take(8)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFF00B894).copy(alpha = 0.15f),
+                                        modifier = Modifier.padding(horizontal = 4.dp)
+                                    ) {
+                                        Text(
+                                            "Conectar",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color(0xFF00B894),
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
                                 }
-                            )
+                            }
                         }
                     }
                 }
             },
             confirmButton = {
                 TextButton(onClick = { showDiscoverDialog = false }) {
-                    Text("Close")
+                    Text(stringResource(R.string.close), fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -105,27 +235,82 @@ fun ChatListScreen(
 }
 
 @Composable
-fun ChatItem(chat: ChatEntity, onClick: () -> Unit) {
-    ListItem(
-        headlineContent = { Text(chat.name, fontWeight = FontWeight.SemiBold) },
-        supportingContent = {
-            Text(
-                chat.lastMessage ?: "Start a conversation",
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        },
-        leadingContent = {
-            Surface(
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Person, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+fun ChatItem(chat: ChatEntity, isOnline: Boolean, onClick: () -> Unit) {
+    Surface(
+        color = Color.Transparent,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            Box {
+                Surface(
+                    shape = CircleShape,
+                    color = if (chat.id == "PUBLIC_CHANNEL") {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.primaryContainer
+                    },
+                    modifier = Modifier.size(52.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = chat.name.take(1).uppercase(),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (chat.id == "PUBLIC_CHANNEL") {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            }
+                        )
+                    }
+                }
+                if (isOnline) {
+                    Box(
+                        modifier = Modifier
+                            .size(14.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF00B894))
+                            .align(Alignment.BottomEnd)
+                    )
                 }
             }
-        },
-        modifier = Modifier.clickable { onClick() }
-    )
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = chat.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    chat.lastMessageTimestamp?.let { timestamp ->
+                        Text(
+                            text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp)),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = chat.lastMessage ?: stringResource(R.string.start_conversation),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
 }
