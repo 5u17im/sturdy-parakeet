@@ -107,7 +107,11 @@ class UpdateManager @Inject constructor(
         }
 
         try {
-            val destinationFile = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName)
+            val downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: File(context.filesDir, "downloads")
+            if (!downloadDir.exists()) {
+                downloadDir.mkdirs()
+            }
+            val destinationFile = File(downloadDir, fileName)
             if (destinationFile.exists()) {
                 destinationFile.delete()
             }
