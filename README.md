@@ -15,11 +15,11 @@
   <img src="https://img.shields.io/badge/Security-E2EE%20AES--256--GCM-red.svg" alt="Security" />
   <img src="https://img.shields.io/badge/Architecture-Clean%20%2B%20Hilt-orange.svg" alt="Architecture" />
   <img src="https://img.shields.io/badge/Network-P2P%20Mesh%20%2B%20WebSockets-brightgreen.svg" alt="Network" />
-  <a href="https://github.com/5u17im/NoSense/releases/latest"><img src="https://img.shields.io/github/v/release/5u17im/NoSense?color=blue&label=Ultima%20Release" alt="Latest Release" /></a>
+  <a href="https://github.com/5u17im/sturdy-parakeet/releases/latest"><img src="https://img.shields.io/github/v/release/5u17im/sturdy-parakeet?color=blue&label=Ultima%20Release" alt="Latest Release" /></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/5u17im/NoSense/releases/latest"><b>📥 Descargar Última Versión APK (GitHub Releases)</b></a>
+  <a href="https://github.com/5u17im/sturdy-parakeet/releases/latest"><b>📥 Descargar Última Versión APK (GitHub Releases)</b></a>
 </p>
 
 ---

@@ -22,7 +22,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "UpdateManager"
-private const val GITHUB_RELEASES_API = "https://api.github.com/repos/5u17im/NoSense/releases/latest"
+private const val GITHUB_RELEASES_API = "https://api.github.com/repos/5u17im/sturdy-parakeet/releases/latest"
 
 data class UpdateInfo(
     val latestVersionName: String,
