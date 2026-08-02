@@ -6,6 +6,7 @@ import com.nothingsense.ns.data.identity.IdentityManager
 import com.nothingsense.ns.data.local.entities.ChatEntity
 import com.nothingsense.ns.data.local.entities.MessageEntity
 import com.nothingsense.ns.data.repository.MessagingRepository
+import com.nothingsense.ns.network.HybridTransportManager
 import com.nothingsense.ns.network.MeshManager
 import com.nothingsense.ns.network.model.MeshNode
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,6 +24,8 @@ class ChatViewModel @Inject constructor(
     private val meshManager: MeshManager,
     private val identityManager: IdentityManager
 ) : ViewModel() {
+
+    val transportManager: HybridTransportManager = repository.transportManager
 
     val chats: StateFlow<List<ChatEntity>> = repository.getAllChats()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -64,6 +67,12 @@ class ChatViewModel @Inject constructor(
     fun createChat(node: MeshNode) {
         viewModelScope.launch {
             repository.createPrivateChat(node.userId, node.username)
+        }
+    }
+
+    fun createPrivateChat(userId: String, username: String) {
+        viewModelScope.launch {
+            repository.createPrivateChat(userId, username)
         }
     }
 

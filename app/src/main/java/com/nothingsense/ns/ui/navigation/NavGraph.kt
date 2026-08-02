@@ -144,11 +144,47 @@ fun NavGraph() {
             }
             composable<Route.ChatDetail> { backStackEntry ->
                 val chatDetail: Route.ChatDetail = backStackEntry.toRoute()
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val reputationManager = remember { com.nothingsense.ns.data.repository.ReputationManager(context, chatViewModel.transportManager) }
+
                 ChatDetailScreen(
                     chatId = chatDetail.chatId,
                     chatName = chatDetail.chatName,
                     viewModel = chatViewModel,
+                    onNavigateToPeerProfile = { targetUserId, targetName ->
+                        navController.navigate(Route.PeerProfile(targetUserId, targetName))
+                    },
+                    onStartCall = { targetUserId, targetName ->
+                        navController.navigate(Route.Call(targetUserId, targetName, false))
+                    },
                     onBack = { navController.popBackStack() }
+                )
+            }
+            composable<Route.PeerProfile> { backStackEntry ->
+                val peerProfile: Route.PeerProfile = backStackEntry.toRoute()
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val reputationManager = remember { com.nothingsense.ns.data.repository.ReputationManager(context, chatViewModel.transportManager) }
+
+                com.nothingsense.ns.ui.profile.PeerProfileScreen(
+                    userId = peerProfile.userId,
+                    username = peerProfile.username,
+                    reputationManager = reputationManager,
+                    onStartChat = {
+                        navController.navigate(Route.ChatDetail(peerProfile.userId, peerProfile.username))
+                    },
+                    onStartCall = {
+                        navController.navigate(Route.Call(peerProfile.userId, peerProfile.username, false))
+                    },
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable<Route.Call> { backStackEntry ->
+                val callRoute: Route.Call = backStackEntry.toRoute()
+                com.nothingsense.ns.ui.call.CallScreen(
+                    peerUsername = callRoute.username,
+                    peerUserId = callRoute.userId,
+                    isIncoming = callRoute.isIncoming,
+                    onEndCall = { navController.popBackStack() }
                 )
             }
         }

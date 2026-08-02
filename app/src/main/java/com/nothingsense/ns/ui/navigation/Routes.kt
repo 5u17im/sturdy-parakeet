@@ -27,4 +27,17 @@ sealed interface Route {
 
     @Serializable
     data object Profile : Route
+
+    @Serializable
+    data class PeerProfile(
+        val userId: String,
+        val username: String
+    ) : Route
+
+    @Serializable
+    data class Call(
+        val userId: String,
+        val username: String,
+        val isIncoming: Boolean = false
+    ) : Route
 }

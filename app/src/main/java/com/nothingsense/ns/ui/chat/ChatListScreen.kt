@@ -148,88 +148,12 @@ fun ChatListScreen(
     }
 
     if (showDiscoverDialog) {
-        AlertDialog(
-            onDismissRequest = { showDiscoverDialog = false },
-            shape = RoundedCornerShape(24.dp),
-            title = {
-                Text(
-                    stringResource(R.string.discovered_nodes),
-                    fontWeight = FontWeight.Bold
-                )
+        AddUserScreen(
+            discoveredNodes = discoveredNodes,
+            onAddUser = { userId, username ->
+                viewModel.createPrivateChat(userId, username)
             },
-            text = {
-                if (discoveredNodes.isEmpty()) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(vertical = 12.dp)
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Text(stringResource(R.string.searching), style = MaterialTheme.typography.bodyMedium)
-                    }
-                } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        items(discoveredNodes) { node ->
-                            Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        viewModel.createChat(node)
-                                        showDiscoverDialog = false
-                                    }
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(12.dp)
-                                ) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = MaterialTheme.colorScheme.primaryContainer,
-                                        modifier = Modifier.size(40.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Text(
-                                                text = node.username.take(1).uppercase(),
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                                            )
-                                        }
-                                    }
-                                    Spacer(Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(node.username, fontWeight = FontWeight.Bold)
-                                        Text(
-                                            "ID: ${node.userId.take(8)}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = Color(0xFF00B894).copy(alpha = 0.15f),
-                                        modifier = Modifier.padding(horizontal = 4.dp)
-                                    ) {
-                                        Text(
-                                            "Conectar",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = Color(0xFF00B894),
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showDiscoverDialog = false }) {
-                    Text(stringResource(R.string.close), fontWeight = FontWeight.Bold)
-                }
-            }
+            onDismiss = { showDiscoverDialog = false }
         )
     }
 }

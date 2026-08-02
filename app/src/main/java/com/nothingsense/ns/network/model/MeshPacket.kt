@@ -32,5 +32,9 @@ enum class PacketType {
     STATUS_UPDATE,
     FILE_TRANSFER,
     HANDSHAKE,
-    CHANNEL_UPDATE
+    CHANNEL_UPDATE,
+    STICKER,
+    AUDIO_STREAM,
+    CALL_SIGNAL,
+    USER_REPORT
 }

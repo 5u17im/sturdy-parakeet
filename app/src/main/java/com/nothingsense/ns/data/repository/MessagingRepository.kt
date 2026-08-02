@@ -35,7 +35,7 @@ class MessagingRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val chatDao: ChatDao,
     private val messageDao: MessageDao,
-    private val transportManager: HybridTransportManager,
+    val transportManager: HybridTransportManager,
     private val identityManager: IdentityManager
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
