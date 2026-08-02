@@ -117,7 +117,7 @@ fun NavGraph() {
             composable<Route.Settings> {
                 SettingsScreen(
                     viewModel = settingsViewModel,
-                    onNavigateToProfile = { navController.navigate(Route.Profile) }
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable<Route.Profile> {

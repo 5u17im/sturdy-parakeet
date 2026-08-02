@@ -1,0 +1,53 @@
+name: Build and Publish Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-release:
+    name: Build & Publish Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Prepare APK Asset
+        run: |
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          mkdir -p artifacts
+          cp app/build/outputs/apk/debug/app-debug.apk "artifacts/NoSense-${TAG_NAME}.apk"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/NoSense-*.apk
+          name: NoSense Release ${{ github.ref_name }}
+          body: |
+            ## ⚡ NoSense Release ${{ github.ref_name }}
+            
+            ### 📥 Descarga Directa
+            Descarga el archivo APK adjunto en tu dispositivo Android e instálalo directamente.
+            
+            ### ✨ Novedades
+            - Mejoras en la red P2P Mesh y transporte híbrido por WebSockets.
+            - Correcciones de seguridad y rendimiento.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
