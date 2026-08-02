@@ -211,6 +211,8 @@ class MeshManager @Inject constructor(
         }
     }
 
+    private val seenPacketIds = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<String, Boolean>())
+
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
             when (payload.type) {
@@ -220,12 +222,7 @@ class MeshManager @Inject constructor(
                             val json = String(bytes)
                             val packet = Json.decodeFromString<MeshPacket>(json)
                             Log.d(TAG, "Packet received from $endpointId: $packet")
-                            if (packet.type == PacketType.FILE_TRANSFER && packet.fileMetadata != null) {
-                                pendingFilePackets[packet.fileMetadata.fileId] = packet
-                                checkAndCompleteFileTransfer(packet.fileMetadata.fileId)
-                            } else {
-                                _incomingPackets.tryEmit(packet)
-                            }
+                            processReceivedPacket(packet, endpointId)
                         } catch (e: Exception) {
                             Log.e(TAG, "Error decoding packet bytes", e)
                         }
@@ -247,6 +244,44 @@ class MeshManager @Inject constructor(
             if (update.status == PayloadTransferUpdate.Status.SUCCESS) {
                 Log.d(TAG, "Payload transfer success for ID: ${update.payloadId}")
                 checkAndCompleteFileTransfer(update.payloadId)
+            }
+        }
+    }
+
+    private fun processReceivedPacket(packet: MeshPacket, endpointId: String) {
+        if (!seenPacketIds.add(packet.packetId)) {
+            Log.d(TAG, "Duplicate packet ${packet.packetId} ignored")
+            return
+        }
+
+        val currentUserId = identityManager.getOrCreateUserId()
+        val isForMe = packet.recipientId == null || packet.recipientId == currentUserId
+
+        if (isForMe) {
+            if (packet.type == PacketType.FILE_TRANSFER && packet.fileMetadata != null) {
+                pendingFilePackets[packet.fileMetadata.fileId] = packet
+                checkAndCompleteFileTransfer(packet.fileMetadata.fileId)
+            } else {
+                _incomingPackets.tryEmit(packet)
+            }
+        }
+
+        // Multi-hop Routing Relay
+        if (packet.ttl > 1 && packet.senderId != currentUserId) {
+            val relayedPacket = packet.copy(
+                ttl = packet.ttl - 1,
+                hopCount = packet.hopCount + 1
+            )
+            val otherEndpoints = _connectedNodes.value.keys.filter { it != endpointId }
+            if (otherEndpoints.isNotEmpty()) {
+                try {
+                    val json = Json.encodeToString(relayedPacket)
+                    val payload = Payload.fromBytes(json.toByteArray())
+                    connectionsClient.sendPayload(otherEndpoints, payload)
+                    Log.d(TAG, "Relayed packet ${packet.packetId} to ${otherEndpoints.size} nodes (Hops: ${relayedPacket.hopCount})")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error relaying packet", e)
+                }
             }
         }
     }

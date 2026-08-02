@@ -1,6 +1,7 @@
 package com.nothingsense.ns.network.model
 
 import kotlinx.serialization.Serializable
+import java.util.UUID
 
 @Serializable
 data class FileMetadata(
@@ -12,11 +13,16 @@ data class FileMetadata(
 
 @Serializable
 data class MeshPacket(
+    val packetId: String = UUID.randomUUID().toString(),
     val senderId: String,
     val senderName: String,
+    val recipientId: String? = null,
     val type: PacketType,
     val content: String,
     val timestamp: Long = System.currentTimeMillis(),
+    val ttl: Int = 10,
+    val hopCount: Int = 0,
+    val signature: String? = null,
     val fileMetadata: FileMetadata? = null
 )
 
@@ -25,5 +31,6 @@ enum class PacketType {
     CHANNEL_MESSAGE,
     STATUS_UPDATE,
     FILE_TRANSFER,
-    HANDSHAKE
+    HANDSHAKE,
+    CHANNEL_UPDATE
 }

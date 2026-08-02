@@ -35,4 +35,7 @@ object DatabaseModule {
 
     @Provides
     fun provideStatusDao(database: AppDatabase): StatusDao = database.statusDao()
+
+    @Provides
+    fun provideChannelDao(database: AppDatabase): com.nothingsense.ns.data.local.dao.ChannelDao = database.channelDao()
 }

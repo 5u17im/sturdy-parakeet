@@ -23,6 +23,8 @@ class IdentityManager @Inject constructor(
 ) {
     private val USER_ID_KEY = stringPreferencesKey("user_id")
     private val USERNAME_KEY = stringPreferencesKey("username")
+    private val BIO_KEY = stringPreferencesKey("bio")
+    private val AVATAR_URI_KEY = stringPreferencesKey("avatar_uri")
     private val ONBOARDING_COMPLETED_KEY = booleanPreferencesKey("onboarding_completed")
 
     val userIdFlow: Flow<String?> = context.dataStore.data.map { preferences ->
@@ -31,6 +33,14 @@ class IdentityManager @Inject constructor(
 
     val usernameFlow: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[USERNAME_KEY]
+    }
+
+    val bioFlow: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[BIO_KEY] ?: "Explorando la red mesh offline de NoSense"
+    }
+
+    val avatarUriFlow: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[AVATAR_URI_KEY]
     }
 
     val onboardingCompletedFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
@@ -52,6 +62,22 @@ class IdentityManager @Inject constructor(
         context.dataStore.edit { preferences ->
             preferences[USERNAME_KEY] = username
             preferences[ONBOARDING_COMPLETED_KEY] = true
+        }
+    }
+
+    suspend fun setBio(bio: String) {
+        context.dataStore.edit { preferences ->
+            preferences[BIO_KEY] = bio
+        }
+    }
+
+    suspend fun setAvatarUri(uri: String?) {
+        context.dataStore.edit { preferences ->
+            if (uri != null) {
+                preferences[AVATAR_URI_KEY] = uri
+            } else {
+                preferences.remove(AVATAR_URI_KEY)
+            }
         }
     }
 

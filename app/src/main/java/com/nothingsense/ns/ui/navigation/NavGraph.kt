@@ -51,7 +51,8 @@ fun NavGraph() {
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
             if (currentDestination?.hasRoute<Route.ChatDetail>() == false && 
-                currentDestination?.hasRoute<Route.Onboarding>() == false) {
+                currentDestination?.hasRoute<Route.Onboarding>() == false &&
+                currentDestination?.hasRoute<Route.Profile>() == false) {
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
                     tonalElevation = 0.dp
@@ -114,7 +115,32 @@ fun NavGraph() {
                 )
             }
             composable<Route.Settings> {
-                SettingsScreen(viewModel = settingsViewModel)
+                SettingsScreen(
+                    viewModel = settingsViewModel,
+                    onNavigateToProfile = { navController.navigate(Route.Profile) }
+                )
+            }
+            composable<Route.Profile> {
+                val username by settingsViewModel.username.collectAsState()
+                val bio by settingsViewModel.bio.collectAsState()
+                val avatarUri by settingsViewModel.avatarUri.collectAsState()
+                val userId by settingsViewModel.userId.collectAsState()
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val cryptoManager = remember { com.nothingsense.ns.security.CryptoManager(context) }
+
+                com.nothingsense.ns.ui.profile.ProfileScreen(
+                    currentUsername = username ?: "Usuario",
+                    currentBio = bio,
+                    currentAvatarUri = avatarUri,
+                    userId = userId ?: "unknown",
+                    cryptoManager = cryptoManager,
+                    onSaveProfile = { newUsername, newBio, newAvatarUri ->
+                        settingsViewModel.updateUsername(newUsername)
+                        settingsViewModel.updateBio(newBio)
+                        settingsViewModel.updateAvatarUri(newAvatarUri)
+                    },
+                    onBack = { navController.popBackStack() }
+                )
             }
             composable<Route.ChatDetail> { backStackEntry ->
                 val chatDetail: Route.ChatDetail = backStackEntry.toRoute()
