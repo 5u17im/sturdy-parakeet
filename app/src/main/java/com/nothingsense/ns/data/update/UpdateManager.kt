@@ -66,7 +66,7 @@ class UpdateManager @Inject constructor(
             val json = JSONObject(bodyString)
 
             val tagName = json.optString("tag_name", "").removePrefix("v")
-            val releaseNotes = json.optString("body", "Sin notas de versión.")
+            val releaseNotes = cleanMarkdownHeaders(json.optString("body", "Sin notas de versión."))
 
             val assetsArray = json.optJSONArray("assets")
             var apkDownloadUrl = ""
@@ -191,6 +191,18 @@ class UpdateManager @Inject constructor(
         } catch (e: Exception) {
             100
         }
+    }
+
+    private fun cleanMarkdownHeaders(rawNotes: String): String {
+        return rawNotes
+            .lines()
+            .map { line ->
+                line.trim()
+                    .replace(Regex("^#+\\s*"), "")
+                    .replace("**", "")
+            }
+            .filter { it.isNotBlank() }
+            .joinToString("\n")
     }
 
     private fun emptyUpdateInfo(versionName: String, versionCode: Int) = UpdateInfo(
