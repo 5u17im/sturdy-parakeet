@@ -8,7 +8,7 @@ import android.util.Base64
 import com.nothingsense.ns.data.identity.IdentityManager
 import com.nothingsense.ns.data.local.dao.StatusDao
 import com.nothingsense.ns.data.local.entities.StatusEntity
-import com.nothingsense.ns.network.MeshManager
+import com.nothingsense.ns.network.HybridTransportManager
 import com.nothingsense.ns.network.model.MeshPacket
 import com.nothingsense.ns.network.model.PacketType
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -29,7 +29,7 @@ import javax.inject.Singleton
 class StatusRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val statusDao: StatusDao,
-    private val meshManager: MeshManager,
+    private val transportManager: HybridTransportManager,
     private val identityManager: IdentityManager
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -40,8 +40,8 @@ class StatusRepository @Inject constructor(
 
     private fun observeIncomingPackets() {
         scope.launch {
-            meshManager.incomingPackets.collectLatest { packet ->
-                if (packet?.type == PacketType.STATUS_UPDATE) {
+            transportManager.incomingPackets.collectLatest { packet ->
+                if (packet.type == PacketType.STATUS_UPDATE) {
                     handleIncomingStatus(packet)
                 }
             }
@@ -49,13 +49,11 @@ class StatusRepository @Inject constructor(
     }
 
     private suspend fun handleIncomingStatus(packet: MeshPacket) {
-        // Content format: "TEXT_CONTENT" or "IMAGE_BASE64||TEXT_CONTENT"
         val parts = packet.content.split("||", limit = 2)
         var imageUri: String? = null
         val textContent: String
 
         if (parts.size == 2) {
-            // Has image: first part is Base64, second is text
             try {
                 val imageBytes = Base64.decode(parts[0], Base64.NO_WRAP)
                 val receivedDir = File(context.filesDir, "received_statuses")
@@ -91,7 +89,6 @@ class StatusRepository @Inject constructor(
         val username = identityManager.getUsername()
         val now = System.currentTimeMillis()
 
-        // Compress and encode image if present
         var imageBase64: String? = null
         var localImageUri: String? = null
 
@@ -122,7 +119,6 @@ class StatusRepository @Inject constructor(
                         val imageBytes = outputStream.toByteArray()
                         imageBase64 = Base64.encodeToString(imageBytes, Base64.NO_WRAP)
 
-                        // Save local copy
                         val statusDir = File(context.filesDir, "received_statuses")
                         if (!statusDir.exists()) statusDir.mkdirs()
                         val localFile = File(statusDir, "${now}_my_status.jpg")
@@ -147,7 +143,6 @@ class StatusRepository @Inject constructor(
         
         statusDao.insertStatus(status)
 
-        // Build packet content: "IMAGE_BASE64||TEXT" or just "TEXT"
         val packetContent = if (imageBase64 != null) {
             "$imageBase64||$content"
         } else {
@@ -161,6 +156,6 @@ class StatusRepository @Inject constructor(
             content = packetContent,
             timestamp = now
         )
-        meshManager.sendPacket(packet) // Broadcast to all
+        transportManager.sendPacket(packet, null)
     }
 }

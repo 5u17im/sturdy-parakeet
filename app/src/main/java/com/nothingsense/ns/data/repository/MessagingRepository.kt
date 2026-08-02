@@ -13,7 +13,7 @@ import com.nothingsense.ns.data.local.entities.ChatEntity
 import com.nothingsense.ns.data.local.entities.ChatType
 import com.nothingsense.ns.data.local.entities.MessageEntity
 import com.nothingsense.ns.data.local.entities.MessageType
-import com.nothingsense.ns.network.MeshManager
+import com.nothingsense.ns.network.HybridTransportManager
 import com.nothingsense.ns.network.model.FileMetadata
 import com.nothingsense.ns.network.model.MeshPacket
 import com.nothingsense.ns.network.model.PacketType
@@ -35,7 +35,7 @@ class MessagingRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val chatDao: ChatDao,
     private val messageDao: MessageDao,
-    private val meshManager: MeshManager,
+    private val transportManager: HybridTransportManager,
     private val identityManager: IdentityManager
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -47,7 +47,7 @@ class MessagingRepository @Inject constructor(
 
     private fun observeIncomingPackets() {
         scope.launch {
-            meshManager.incomingPackets.collect { packet ->
+            transportManager.incomingPackets.collect { packet ->
                 handleIncomingPacket(packet)
             }
         }
@@ -55,7 +55,7 @@ class MessagingRepository @Inject constructor(
 
     private fun observePeerConnections() {
         scope.launch {
-            meshManager.peerConnectedEvent.collect { node ->
+            transportManager.peerConnectedEvent.collect { node ->
                 createPrivateChat(node.userId, node.username)
             }
         }
@@ -67,7 +67,7 @@ class MessagingRepository @Inject constructor(
                 saveMessage(packet, packet.senderId, packet.senderName)
             }
             PacketType.CHANNEL_MESSAGE -> {
-                saveMessage(packet, "PUBLIC_CHANNEL", "Public Channel")
+                saveMessage(packet, "PUBLIC_CHANNEL", "Canal Público")
             }
             PacketType.FILE_TRANSFER -> {
                 handleIncomingFile(packet)
@@ -86,9 +86,8 @@ class MessagingRepository @Inject constructor(
             else -> MessageType.FILE
         }
 
-        val targetChatId = if (packet.recipientId == null) "PUBLIC_CHANNEL" else packet.senderId
+        val targetChatId = if (packet.recipientId == null || packet.recipientId == "PUBLIC_CHANNEL") "PUBLIC_CHANNEL" else packet.senderId
 
-        // Decode Base64 content and save to local file
         var savedFileUri: String? = null
         try {
             val base64Data = packet.content
@@ -104,7 +103,6 @@ class MessagingRepository @Inject constructor(
                 output.write(fileBytes)
             }
             savedFileUri = android.net.Uri.fromFile(destFile).toString()
-            android.util.Log.d("MessagingRepository", "Saved received file to $savedFileUri (${fileBytes.size} bytes)")
         } catch (e: Exception) {
             android.util.Log.e("MessagingRepository", "Failed to decode/save incoming file", e)
         }
@@ -115,12 +113,12 @@ class MessagingRepository @Inject constructor(
             id = UUID.randomUUID().toString(),
             chatId = targetChatId,
             senderId = packet.senderId,
-            text = fileMeta?.fileName ?: "Received File",
+            text = fileMeta?.fileName ?: "Archivo Recibido",
             timestamp = packet.timestamp,
             type = messageType,
             fileUri = savedFileUri,
             fileType = mimeType,
-            fileName = fileMeta?.fileName ?: "File"
+            fileName = fileMeta?.fileName ?: "Archivo"
         )
 
         val chat = chatDao.getChatById(targetChatId)
@@ -213,18 +211,13 @@ class MessagingRepository @Inject constructor(
         val packet = MeshPacket(
             senderId = userId,
             senderName = username,
+            recipientId = if (isChannel) null else chatId,
             type = if (isChannel) PacketType.CHANNEL_MESSAGE else PacketType.PRIVATE_MESSAGE,
             content = text,
             timestamp = timestamp
         )
         
-        if (isChannel) {
-            meshManager.sendPacket(packet)
-        } else {
-            val connectedNodes = meshManager.connectedNodes.value
-            val targetEndpoint = connectedNodes.values.find { it.userId == chatId }?.endpointId
-            meshManager.sendPacket(packet, targetEndpoint)
-        }
+        transportManager.sendPacket(packet, if (isChannel) null else chatId)
     }
 
     suspend fun createPrivateChat(userId: String, username: String) {
@@ -278,7 +271,6 @@ class MessagingRepository @Inject constructor(
             else -> MessageType.FILE
         }
 
-        // Compress and encode file to Base64
         val base64Content: String
         try {
             val rawBytes = if (finalMimeType.startsWith("image/")) {
@@ -287,14 +279,10 @@ class MessagingRepository @Inject constructor(
                 readFileBytes(uri)
             }
             
-            if (rawBytes == null || rawBytes.isEmpty()) {
-                android.util.Log.e("MessagingRepository", "Failed to read file bytes")
-                return
-            }
+            if (rawBytes == null || rawBytes.isEmpty()) return
             
             base64Content = Base64.encodeToString(rawBytes, Base64.NO_WRAP)
             fileSize = rawBytes.size.toLong()
-            android.util.Log.d("MessagingRepository", "Encoded file to Base64: ${rawBytes.size} bytes -> ${base64Content.length} chars")
         } catch (e: Exception) {
             android.util.Log.e("MessagingRepository", "Error encoding file to Base64", e)
             return
@@ -333,13 +321,7 @@ class MessagingRepository @Inject constructor(
             fileMetadata = FileMetadata(0, fileName, finalMimeType, fileSize)
         )
 
-        if (isChannel) {
-            meshManager.sendPacket(packet, null)
-        } else {
-            val connectedNodes = meshManager.connectedNodes.value
-            val targetEndpoint = connectedNodes.values.find { it.userId == chatId }?.endpointId
-            meshManager.sendPacket(packet, targetEndpoint)
-        }
+        transportManager.sendPacket(packet, if (isChannel) null else chatId)
     }
 
     private fun compressImage(uri: android.net.Uri, maxWidth: Int, quality: Int): ByteArray? {

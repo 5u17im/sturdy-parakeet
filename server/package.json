@@ -1,0 +1,12 @@
+{
+  "name": "nosense-cloud-relay",
+  "version": "1.0.0",
+  "description": "Anonymous Zero-Logs WebSocket Relay Server for NoSense Mesh Application",
+  "main": "relay_server.js",
+  "scripts": {
+    "start": "node relay_server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
