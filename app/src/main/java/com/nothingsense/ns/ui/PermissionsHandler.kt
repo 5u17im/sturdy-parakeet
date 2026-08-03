@@ -68,6 +68,7 @@ fun NearbyPermissionsHandler(
                 hardwareMessage = locationMessage
                 showHardwareDialog = true
             } else {
+                com.nothingsense.ns.service.MeshService.startService(context)
                 onPermissionsGranted()
             }
         } else {

@@ -99,6 +99,14 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    fun setCallMuted(isMuted: Boolean) {
+        repository.audioEngine.setMuted(isMuted)
+    }
+
+    fun setSpeakerphoneOn(speakerOn: Boolean) {
+        repository.audioEngine.setSpeakerphoneOn(speakerOn)
+    }
+
     fun stopCallAudio() {
         repository.audioEngine.stopRecording()
     }

@@ -206,11 +206,7 @@ fun CallScreen(
                     IconButton(
                         onClick = {
                             isMuted = !isMuted
-                            if (isMuted) {
-                                viewModel.stopCallAudio()
-                            } else {
-                                viewModel.startCallAudio(peerUserId)
-                            }
+                            viewModel.setCallMuted(isMuted)
                         },
                         modifier = Modifier
                             .size(60.dp)
@@ -247,7 +243,10 @@ fun CallScreen(
 
                     // Speakerphone
                     IconButton(
-                        onClick = { isSpeakerOn = !isSpeakerOn },
+                        onClick = {
+                            isSpeakerOn = !isSpeakerOn
+                            viewModel.setSpeakerphoneOn(isSpeakerOn)
+                        },
                         modifier = Modifier
                             .size(60.dp)
                             .background(

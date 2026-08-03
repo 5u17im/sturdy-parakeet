@@ -60,7 +60,9 @@ fun NavGraph() {
         bottomBar = {
             if (currentDestination?.hasRoute<Route.ChatDetail>() == false && 
                 currentDestination?.hasRoute<Route.Onboarding>() == false &&
-                currentDestination?.hasRoute<Route.Profile>() == false) {
+                currentDestination?.hasRoute<Route.Profile>() == false &&
+                currentDestination?.hasRoute<Route.Call>() == false &&
+                currentDestination?.hasRoute<Route.PeerProfile>() == false) {
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
                     tonalElevation = 0.dp

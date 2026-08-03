@@ -36,6 +36,9 @@ class P2PAudioEngine @Inject constructor(
     private var isRecording = false
 
     @Volatile
+    private var isMuted = false
+
+    @Volatile
     private var isPlaying = false
 
     init {
@@ -74,6 +77,7 @@ class P2PAudioEngine @Inject constructor(
     fun startRecording(onAudioFrameCaptured: (ByteArray) -> Unit) {
         if (isRecording) return
         isRecording = true
+        isMuted = false
 
         recordingJob = scope.launch {
             var audioRecord: AudioRecord? = null
@@ -101,7 +105,7 @@ class P2PAudioEngine @Inject constructor(
                 val buffer = ByteArray(1024)
                 while (isActive && isRecording) {
                     val readBytes = audioRecord.read(buffer, 0, buffer.size)
-                    if (readBytes > 0) {
+                    if (readBytes > 0 && !isMuted) {
                         val frame = buffer.copyOf(readBytes)
                         onAudioFrameCaptured(frame)
                     }
@@ -123,8 +127,27 @@ class P2PAudioEngine @Inject constructor(
 
     fun isRecording(): Boolean = isRecording
 
+    fun setMuted(muted: Boolean) {
+        isMuted = muted
+        Log.d(TAG, "Mute state changed to: $muted")
+    }
+
+    fun isMuted(): Boolean = isMuted
+
+    fun setSpeakerphoneOn(speakerOn: Boolean) {
+        try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+            audioManager?.mode = android.media.AudioManager.MODE_IN_COMMUNICATION
+            audioManager?.isSpeakerphoneOn = speakerOn
+            Log.d(TAG, "Speakerphone set to: $speakerOn")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to toggle speakerphone", e)
+        }
+    }
+
     fun stopRecording() {
         isRecording = false
+        isMuted = false
         recordingJob?.cancel()
         recordingJob = null
     }

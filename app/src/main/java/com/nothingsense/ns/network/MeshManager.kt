@@ -49,7 +49,15 @@ class MeshManager @Inject constructor(
     private val pendingFilePacketsQueue = ConcurrentLinkedQueue<MeshPacket>()
     private val pendingFilePayloads = ConcurrentHashMap<Long, Payload.File>()
     private val completedPayloadStatus = ConcurrentHashMap<Long, Boolean>()
-    private val seenPacketIds = java.util.Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+    private val seenPacketIds: MutableSet<String> = java.util.Collections.synchronizedSet(
+        java.util.Collections.newSetFromMap(
+            object : java.util.LinkedHashMap<String, Boolean>(500, 0.75f, true) {
+                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?): Boolean {
+                    return size > 3000
+                }
+            }
+        )
+    )
 
     fun startMesh() {
         if (isMeshStarted) return

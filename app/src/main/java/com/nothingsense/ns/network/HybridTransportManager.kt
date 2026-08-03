@@ -33,7 +33,15 @@ class HybridTransportManager @Inject constructor(
     val isCloudConnected: StateFlow<Boolean> = cloudRelayClient.isConnected
     val peerConnectedEvent: SharedFlow<MeshNode> = meshManager.peerConnectedEvent
 
-    private val relayedPacketIds = java.util.Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+    private val relayedPacketIds: MutableSet<String> = java.util.Collections.synchronizedSet(
+        java.util.Collections.newSetFromMap(
+            object : java.util.LinkedHashMap<String, Boolean>(500, 0.75f, true) {
+                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?): Boolean {
+                    return size > 3000
+                }
+            }
+        )
+    )
 
     init {
         startTransportEngine()

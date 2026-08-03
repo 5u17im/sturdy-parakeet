@@ -40,6 +40,8 @@ fun ChatListScreen(
     val discoveredNodes by viewModel.discoveredNodes.collectAsState()
     var showDiscoverDialog by remember { mutableStateOf(false) }
 
+    val isCloudConnected by viewModel.transportManager.isCloudConnected.collectAsState()
+
     NearbyPermissionsHandler {
         viewModel.startMesh()
     }
@@ -60,11 +62,15 @@ fun ChatListScreen(
                                 modifier = Modifier
                                     .size(8.dp)
                                     .clip(CircleShape)
-                                    .background(if (connectedNodes.isNotEmpty()) Color(0xFF00B894) else MaterialTheme.colorScheme.outline)
+                                    .background(if (connectedNodes.isNotEmpty() || isCloudConnected) Color(0xFF00B894) else MaterialTheme.colorScheme.outline)
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                text = if (connectedNodes.isNotEmpty()) "${connectedNodes.size} peer(s) conectados" else "Mesh activo en segundo plano",
+                                text = buildString {
+                                    if (connectedNodes.isNotEmpty()) append("Mesh: ${connectedNodes.size} peer(s) ")
+                                    else append("Mesh activo ")
+                                    if (isCloudConnected) append("| ☁️ Relay OK")
+                                },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                             )

@@ -34,6 +34,8 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
+import com.nothingsense.ns.security.CryptoManager
+
 data class CallSignalEvent(
     val senderId: String,
     val senderName: String,
@@ -47,7 +49,8 @@ class MessagingRepository @Inject constructor(
     private val messageDao: MessageDao,
     val transportManager: HybridTransportManager,
     private val identityManager: IdentityManager,
-    val audioEngine: P2PAudioEngine
+    val audioEngine: P2PAudioEngine,
+    private val cryptoManager: CryptoManager
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -189,11 +192,17 @@ class MessagingRepository @Inject constructor(
         chatName: String, 
         isFile: Boolean = false
     ) {
+        val messageText = if (packet.type == PacketType.PRIVATE_MESSAGE && !isFile) {
+            cryptoManager.decrypt(packet.content)
+        } else {
+            packet.content
+        }
+
         val messageEntity = MessageEntity(
             id = UUID.randomUUID().toString(),
             chatId = chatId,
             senderId = packet.senderId,
-            text = packet.content,
+            text = messageText,
             timestamp = packet.timestamp,
             type = if (isFile) MessageType.FILE else MessageType.TEXT,
             fileType = packet.fileMetadata?.fileType,
@@ -207,13 +216,13 @@ class MessagingRepository @Inject constructor(
                     id = chatId,
                     name = chatName,
                     type = if (chatId == "PUBLIC_CHANNEL") ChatType.CHANNEL else ChatType.PRIVATE,
-                    lastMessage = packet.content,
+                    lastMessage = messageText,
                     lastMessageTimestamp = packet.timestamp
                 )
             )
         } else {
             chatDao.insertChat(chat.copy(
-                lastMessage = packet.content,
+                lastMessage = messageText,
                 lastMessageTimestamp = packet.timestamp
             ))
         }
@@ -248,13 +257,21 @@ class MessagingRepository @Inject constructor(
             ))
         }
 
+        val contentToSend = if (!isChannel) {
+            cryptoManager.encrypt(text)
+        } else {
+            text
+        }
+        val signature = cryptoManager.generateFingerprint("$userId:$timestamp:$text")
+
         val packet = MeshPacket(
             senderId = userId,
             senderName = username,
             recipientId = if (isChannel) null else chatId,
             type = if (isChannel) PacketType.CHANNEL_MESSAGE else PacketType.PRIVATE_MESSAGE,
-            content = text,
-            timestamp = timestamp
+            content = contentToSend,
+            timestamp = timestamp,
+            signature = signature
         )
         
         transportManager.sendPacket(packet, if (isChannel) null else chatId)
