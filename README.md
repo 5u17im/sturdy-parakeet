@@ -1,7 +1,7 @@
 # ⚡ NoSense
 
 <p align="center">
-  <img src="app/src/main/res/mipmap-xxhdpi/ic_launcher.png" width="128" height="128" alt="NoSense Logo" />
+  <img src="app/src/main/res/mipmap-xxhdpi/ic_launcher.webp" width="128" height="128" alt="NoSense Logo" />
 </p>
 
 <p align="center">

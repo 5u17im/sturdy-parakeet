@@ -42,9 +42,9 @@ fun SettingsScreen(
     val currentUsername by viewModel.username.collectAsState()
     var username by remember(currentUsername) { mutableStateOf(currentUsername ?: "") }
     val clipboardManager = LocalClipboardManager.current
-    var isBiometricEnabled by remember { mutableStateOf(false) }
-    var isAutoDownloadEnabled by remember { mutableStateOf(true) }
-    var selectedTheme by remember { mutableStateOf("NoSense Dark") }
+    val isBiometricEnabled by viewModel.biometricEnabled.collectAsState()
+    val isAutoDownloadEnabled by viewModel.autoDownload.collectAsState()
+    val selectedTheme by viewModel.themeMode.collectAsState()
 
     val updateInfo by viewModel.updateInfoState.collectAsState()
     val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsState()
@@ -262,7 +262,8 @@ fun SettingsScreen(
                 subtitle = selectedTheme,
                 checked = selectedTheme == "NoSense Dark",
                 onCheckedChange = {
-                    selectedTheme = if (it) "NoSense Dark" else "Modo Claro"
+                    val newTheme = if (it) "NoSense Dark" else "Modo Claro"
+                    viewModel.setThemeMode(newTheme)
                 }
             )
 
@@ -273,7 +274,7 @@ fun SettingsScreen(
                 title = "Bloqueo Biométrico",
                 subtitle = "Requerir Huella/PIN para abrir la app",
                 checked = isBiometricEnabled,
-                onCheckedChange = { isBiometricEnabled = it }
+                onCheckedChange = { viewModel.setBiometricEnabled(it) }
             )
 
             SettingsSwitchRow(
@@ -281,7 +282,7 @@ fun SettingsScreen(
                 title = "Descarga Automática Mesh",
                 subtitle = "Descargar archivos adjuntos automáticamente",
                 checked = isAutoDownloadEnabled,
-                onCheckedChange = { isAutoDownloadEnabled = it }
+                onCheckedChange = { viewModel.setAutoDownloadEnabled(it) }
             )
 
             // App Version Footer

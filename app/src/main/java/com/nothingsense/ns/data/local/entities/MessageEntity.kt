@@ -13,9 +13,14 @@ data class MessageEntity(
     val type: MessageType,
     val fileUri: String? = null,
     val fileType: String? = null,
-    val fileName: String? = null
+    val fileName: String? = null,
+    val status: DeliveryStatus = DeliveryStatus.SENT
 )
 
 enum class MessageType {
     TEXT, IMAGE, VIDEO, AUDIO, FILE
+}
+
+enum class DeliveryStatus {
+    PENDING, SENT, DELIVERED
 }

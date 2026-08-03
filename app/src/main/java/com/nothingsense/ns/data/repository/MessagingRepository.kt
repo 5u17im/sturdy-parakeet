@@ -60,6 +60,8 @@ class MessagingRepository @Inject constructor(
     private val _incomingAudioStreams = MutableSharedFlow<Pair<String, ByteArray>>(extraBufferCapacity = 128)
     val incomingAudioStreams: SharedFlow<Pair<String, ByteArray>> = _incomingAudioStreams.asSharedFlow()
 
+    private val peerSharedKeys = java.util.concurrent.ConcurrentHashMap<String, javax.crypto.SecretKey>()
+
     init {
         observeIncomingPackets()
         observePeerConnections()
@@ -77,12 +79,66 @@ class MessagingRepository @Inject constructor(
         scope.launch {
             transportManager.peerConnectedEvent.collect { node ->
                 createPrivateChat(node.userId, node.username)
+                sendHandshake(node.userId)
+                flushPendingMessages(node.userId)
             }
+        }
+    }
+
+    private suspend fun sendHandshake(targetUserId: String) {
+        val userId = identityManager.getOrCreateUserId()
+        val username = identityManager.getUsername()
+        val pubKey = cryptoManager.getPublicKeyBase64()
+        if (pubKey.isNotBlank()) {
+            val packet = MeshPacket(
+                senderId = userId,
+                senderName = username,
+                recipientId = targetUserId,
+                type = PacketType.HANDSHAKE,
+                content = pubKey,
+                timestamp = System.currentTimeMillis()
+            )
+            transportManager.sendPacket(packet, targetUserId)
+        }
+    }
+
+    suspend fun flushPendingMessages(targetUserId: String) {
+        val pending = messageDao.getPendingMessagesForChat(targetUserId)
+        for (msg in pending) {
+            val userId = identityManager.getOrCreateUserId()
+            val username = identityManager.getUsername()
+            val sharedKey = peerSharedKeys[targetUserId]
+            val contentToSend = if (sharedKey != null) {
+                cryptoManager.encryptWithKey(msg.text, sharedKey)
+            } else {
+                cryptoManager.encrypt(msg.text)
+            }
+            val signature = cryptoManager.generateFingerprint("$userId:${msg.timestamp}:${msg.text}")
+            val packet = MeshPacket(
+                packetId = msg.id,
+                senderId = userId,
+                senderName = username,
+                recipientId = targetUserId,
+                type = PacketType.PRIVATE_MESSAGE,
+                content = contentToSend,
+                timestamp = msg.timestamp,
+                signature = signature
+            )
+            transportManager.sendPacket(packet, targetUserId)
+            messageDao.updateMessageStatus(msg.id, com.nothingsense.ns.data.local.entities.DeliveryStatus.SENT)
         }
     }
 
     private suspend fun handleIncomingPacket(packet: MeshPacket) {
         when (packet.type) {
+            PacketType.HANDSHAKE -> {
+                val derivedKey = cryptoManager.deriveSharedKey(packet.content)
+                if (derivedKey != null) {
+                    peerSharedKeys[packet.senderId] = derivedKey
+                    android.util.Log.d("MessagingRepository", "ECDH Shared key derived for peer: ${packet.senderId}")
+                    flushPendingMessages(packet.senderId)
+                }
+            }
             PacketType.PRIVATE_MESSAGE -> {
                 saveMessage(packet, packet.senderId, packet.senderName)
             }
@@ -193,7 +249,12 @@ class MessagingRepository @Inject constructor(
         isFile: Boolean = false
     ) {
         val messageText = if (packet.type == PacketType.PRIVATE_MESSAGE && !isFile) {
-            cryptoManager.decrypt(packet.content)
+            val peerKey = peerSharedKeys[packet.senderId]
+            if (peerKey != null) {
+                cryptoManager.decryptWithKey(packet.content, peerKey)
+            } else {
+                cryptoManager.decrypt(packet.content)
+            }
         } else {
             packet.content
         }
@@ -206,7 +267,8 @@ class MessagingRepository @Inject constructor(
             timestamp = packet.timestamp,
             type = if (isFile) MessageType.FILE else MessageType.TEXT,
             fileType = packet.fileMetadata?.fileType,
-            fileName = packet.fileMetadata?.fileName
+            fileName = packet.fileMetadata?.fileName,
+            status = com.nothingsense.ns.data.local.entities.DeliveryStatus.DELIVERED
         )
 
         val chat = chatDao.getChatById(chatId)
@@ -238,13 +300,20 @@ class MessagingRepository @Inject constructor(
         val username = identityManager.getUsername()
         val timestamp = System.currentTimeMillis()
 
+        val isConnected = isChannel || 
+            transportManager.connectedLocalNodes.value.values.any { it.userId == chatId } || 
+            transportManager.isCloudConnected.value
+
+        val initialStatus = if (isConnected) com.nothingsense.ns.data.local.entities.DeliveryStatus.SENT else com.nothingsense.ns.data.local.entities.DeliveryStatus.PENDING
+
         val messageEntity = MessageEntity(
             id = UUID.randomUUID().toString(),
             chatId = chatId,
             senderId = userId,
             text = text,
             timestamp = timestamp,
-            type = MessageType.TEXT
+            type = MessageType.TEXT,
+            status = initialStatus
         )
         
         messageDao.insertMessage(messageEntity)
@@ -257,8 +326,10 @@ class MessagingRepository @Inject constructor(
             ))
         }
 
+        val sharedKey = peerSharedKeys[chatId]
         val contentToSend = if (!isChannel) {
-            cryptoManager.encrypt(text)
+            if (sharedKey != null) cryptoManager.encryptWithKey(text, sharedKey)
+            else cryptoManager.encrypt(text)
         } else {
             text
         }

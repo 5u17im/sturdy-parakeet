@@ -32,6 +32,15 @@ class SettingsViewModel @Inject constructor(
     val avatarUri: StateFlow<String?> = identityManager.avatarUriFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    val biometricEnabled: StateFlow<Boolean> = identityManager.biometricEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val autoDownload: StateFlow<Boolean> = identityManager.autoDownloadFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val themeMode: StateFlow<String> = identityManager.themeModeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "NoSense Dark")
+
     private val _updateInfoState = MutableStateFlow<UpdateInfo?>(null)
     val updateInfoState: StateFlow<UpdateInfo?> = _updateInfoState.asStateFlow()
 
@@ -53,6 +62,24 @@ class SettingsViewModel @Inject constructor(
     fun updateAvatarUri(newUri: String?) {
         viewModelScope.launch {
             identityManager.setAvatarUri(newUri)
+        }
+    }
+
+    fun setBiometricEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            identityManager.setBiometricEnabled(enabled)
+        }
+    }
+
+    fun setAutoDownloadEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            identityManager.setAutoDownloadEnabled(enabled)
+        }
+    }
+
+    fun setThemeMode(theme: String) {
+        viewModelScope.launch {
+            identityManager.setThemeMode(theme)
         }
     }
 

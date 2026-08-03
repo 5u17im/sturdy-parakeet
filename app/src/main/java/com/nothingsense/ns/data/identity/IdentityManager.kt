@@ -26,6 +26,9 @@ class IdentityManager @Inject constructor(
     private val BIO_KEY = stringPreferencesKey("bio")
     private val AVATAR_URI_KEY = stringPreferencesKey("avatar_uri")
     private val ONBOARDING_COMPLETED_KEY = booleanPreferencesKey("onboarding_completed")
+    private val BIOMETRIC_ENABLED_KEY = booleanPreferencesKey("biometric_enabled")
+    private val AUTO_DOWNLOAD_KEY = booleanPreferencesKey("auto_download_enabled")
+    private val THEME_MODE_KEY = stringPreferencesKey("theme_mode")
 
     val userIdFlow: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[USER_ID_KEY]
@@ -45,6 +48,18 @@ class IdentityManager @Inject constructor(
 
     val onboardingCompletedFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[ONBOARDING_COMPLETED_KEY] ?: false
+    }
+
+    val biometricEnabledFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[BIOMETRIC_ENABLED_KEY] ?: false
+    }
+
+    val autoDownloadFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[AUTO_DOWNLOAD_KEY] ?: true
+    }
+
+    val themeModeFlow: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[THEME_MODE_KEY] ?: "NoSense Dark"
     }
 
     suspend fun getOrCreateUserId(): String {
@@ -78,6 +93,24 @@ class IdentityManager @Inject constructor(
             } else {
                 preferences.remove(AVATAR_URI_KEY)
             }
+        }
+    }
+
+    suspend fun setBiometricEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[BIOMETRIC_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun setAutoDownloadEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[AUTO_DOWNLOAD_KEY] = enabled
+        }
+    }
+
+    suspend fun setThemeMode(theme: String) {
+        context.dataStore.edit { preferences ->
+            preferences[THEME_MODE_KEY] = theme
         }
     }
 

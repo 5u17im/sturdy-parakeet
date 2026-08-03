@@ -14,4 +14,10 @@ interface MessageDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: MessageEntity)
+
+    @Query("SELECT * FROM messages WHERE chatId = :chatId AND status = 'PENDING' ORDER BY timestamp ASC")
+    suspend fun getPendingMessagesForChat(chatId: String): List<MessageEntity>
+
+    @Query("UPDATE messages SET status = :status WHERE id = :messageId")
+    suspend fun updateMessageStatus(messageId: String, status: com.nothingsense.ns.data.local.entities.DeliveryStatus)
 }

@@ -14,7 +14,7 @@ import com.nothingsense.ns.data.local.entities.StatusEntity
 
 @Database(
     entities = [ChatEntity::class, MessageEntity::class, StatusEntity::class, ChannelEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
