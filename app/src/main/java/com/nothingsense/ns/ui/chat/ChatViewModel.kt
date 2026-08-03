@@ -76,9 +76,42 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    val incomingCallEvents = repository.incomingCallEvents
+    val incomingAudioStreams = repository.incomingAudioStreams
+
     fun sendFile(chatId: String, uri: android.net.Uri) {
         viewModelScope.launch {
             repository.sendFile(chatId, uri)
         }
+    }
+
+    fun sendCallSignal(targetUserId: String, signal: String) {
+        viewModelScope.launch {
+            repository.sendCallSignal(targetUserId, signal)
+        }
+    }
+
+    fun startCallAudio(targetUserId: String) {
+        repository.audioEngine.startRecording { frame ->
+            viewModelScope.launch {
+                repository.sendAudioFrame(targetUserId, frame)
+            }
+        }
+    }
+
+    fun stopCallAudio() {
+        repository.audioEngine.stopRecording()
+    }
+
+    fun startWalkieTalkie(targetUserId: String?) {
+        repository.audioEngine.startRecording { frame ->
+            viewModelScope.launch {
+                repository.sendAudioFrame(if (targetUserId == "PUBLIC_CHANNEL") null else targetUserId, frame)
+            }
+        }
+    }
+
+    fun stopWalkieTalkie(targetUserId: String?) {
+        repository.audioEngine.stopRecording()
     }
 }

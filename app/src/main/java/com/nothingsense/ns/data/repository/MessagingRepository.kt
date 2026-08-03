@@ -14,6 +14,7 @@ import com.nothingsense.ns.data.local.entities.ChatType
 import com.nothingsense.ns.data.local.entities.MessageEntity
 import com.nothingsense.ns.data.local.entities.MessageType
 import com.nothingsense.ns.network.HybridTransportManager
+import com.nothingsense.ns.network.audio.P2PAudioEngine
 import com.nothingsense.ns.network.model.FileMetadata
 import com.nothingsense.ns.network.model.MeshPacket
 import com.nothingsense.ns.network.model.PacketType
@@ -22,6 +23,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -30,15 +34,28 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
+data class CallSignalEvent(
+    val senderId: String,
+    val senderName: String,
+    val signal: String
+)
+
 @Singleton
 class MessagingRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val chatDao: ChatDao,
     private val messageDao: MessageDao,
     val transportManager: HybridTransportManager,
-    private val identityManager: IdentityManager
+    private val identityManager: IdentityManager,
+    val audioEngine: P2PAudioEngine
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val _incomingCallEvents = MutableSharedFlow<CallSignalEvent>(extraBufferCapacity = 64)
+    val incomingCallEvents: SharedFlow<CallSignalEvent> = _incomingCallEvents.asSharedFlow()
+
+    private val _incomingAudioStreams = MutableSharedFlow<Pair<String, ByteArray>>(extraBufferCapacity = 128)
+    val incomingAudioStreams: SharedFlow<Pair<String, ByteArray>> = _incomingAudioStreams.asSharedFlow()
 
     init {
         observeIncomingPackets()
@@ -72,17 +89,40 @@ class MessagingRepository @Inject constructor(
             PacketType.FILE_TRANSFER -> {
                 handleIncomingFile(packet)
             }
+            PacketType.CALL_SIGNAL -> {
+                _incomingCallEvents.tryEmit(
+                    CallSignalEvent(
+                        senderId = packet.senderId,
+                        senderName = packet.senderName,
+                        signal = packet.content
+                    )
+                )
+            }
+            PacketType.AUDIO_STREAM -> {
+                if (packet.content != "EOF") {
+                    try {
+                        val audioFrame = Base64.decode(packet.content, Base64.NO_WRAP)
+                        audioEngine.playAudioFrame(audioFrame)
+                        _incomingAudioStreams.tryEmit(Pair(packet.senderId, audioFrame))
+                    } catch (e: Exception) {
+                        android.util.Log.e("MessagingRepository", "Error decoding audio frame", e)
+                    }
+                }
+            }
             else -> {}
         }
     }
 
     private suspend fun handleIncomingFile(packet: MeshPacket) {
         val fileMeta = packet.fileMetadata
-        val mimeType = fileMeta?.fileType ?: "application/octet-stream"
+        val fileName = fileMeta?.fileName ?: ""
+        val extFromName = fileName.substringAfterLast('.', "").lowercase()
+        val isAudioExt = listOf("mp3", "m4a", "ogg", "wav", "aac", "opus", "flac", "3gp", "amr").contains(extFromName)
+        val mimeType = fileMeta?.fileType ?: if (isAudioExt) "audio/$extFromName" else "application/octet-stream"
         val messageType = when {
             mimeType.startsWith("image/") -> MessageType.IMAGE
             mimeType.startsWith("video/") -> MessageType.VIDEO
-            mimeType.startsWith("audio/") -> MessageType.AUDIO
+            mimeType.startsWith("audio/") || isAudioExt -> MessageType.AUDIO
             else -> MessageType.FILE
         }
 
@@ -256,18 +296,20 @@ class MessagingRepository @Inject constructor(
             android.util.Log.e("MessagingRepository", "Error querying file metadata", e)
         }
 
-        if (mimeType == null) {
-            val extension = MimeTypeMap.getFileExtensionFromUrl(uri.toString())
-            if (extension != null) {
+        val extFromName = fileName.substringAfterLast('.', "").lowercase()
+        if (mimeType == null || mimeType == "application/octet-stream") {
+            val extension = if (extFromName.isNotBlank()) extFromName else MimeTypeMap.getFileExtensionFromUrl(uri.toString())
+            if (extension.isNotBlank()) {
                 mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.lowercase())
             }
         }
-        val finalMimeType = mimeType ?: "application/octet-stream"
+        val isAudioExt = listOf("mp3", "m4a", "ogg", "wav", "aac", "opus", "flac", "3gp", "amr").contains(extFromName)
+        val finalMimeType = if (isAudioExt && (mimeType == null || mimeType == "application/octet-stream")) "audio/$extFromName" else (mimeType ?: "application/octet-stream")
 
         val type = when {
             finalMimeType.startsWith("image/") -> MessageType.IMAGE
             finalMimeType.startsWith("video/") -> MessageType.VIDEO
-            finalMimeType.startsWith("audio/") -> MessageType.AUDIO
+            finalMimeType.startsWith("audio/") || isAudioExt -> MessageType.AUDIO
             else -> MessageType.FILE
         }
 
@@ -373,5 +415,34 @@ class MessagingRepository @Inject constructor(
             android.util.Log.e("MessagingRepository", "Read file bytes failed", e)
             null
         }
+    }
+
+    suspend fun sendCallSignal(targetUserId: String, signal: String) {
+        val userId = identityManager.getOrCreateUserId()
+        val username = identityManager.getUsername()
+        val packet = MeshPacket(
+            senderId = userId,
+            senderName = username,
+            recipientId = targetUserId,
+            type = PacketType.CALL_SIGNAL,
+            content = signal,
+            timestamp = System.currentTimeMillis()
+        )
+        transportManager.sendPacket(packet, targetUserId)
+    }
+
+    suspend fun sendAudioFrame(targetUserId: String?, audioFrame: ByteArray) {
+        val userId = identityManager.getOrCreateUserId()
+        val username = identityManager.getUsername()
+        val base64Content = Base64.encodeToString(audioFrame, Base64.NO_WRAP)
+        val packet = MeshPacket(
+            senderId = userId,
+            senderName = username,
+            recipientId = targetUserId,
+            type = PacketType.AUDIO_STREAM,
+            content = base64Content,
+            timestamp = System.currentTimeMillis()
+        )
+        transportManager.sendPacket(packet, targetUserId)
     }
 }

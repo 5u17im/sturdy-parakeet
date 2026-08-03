@@ -230,9 +230,11 @@ fun ChatDetailScreen(
                                         detectTapGestures(
                                             onPress = {
                                                 isRecordingWalkieTalkie = true
+                                                viewModel.startWalkieTalkie(chatId)
                                                 Toast.makeText(context, "📻 Transmitiendo en Walkie-Talkie P2P...", Toast.LENGTH_SHORT).show()
                                                 tryAwaitRelease()
                                                 isRecordingWalkieTalkie = false
+                                                viewModel.stopWalkieTalkie(chatId)
                                                 Toast.makeText(context, "Fin de transmisión", Toast.LENGTH_SHORT).show()
                                             }
                                         )
@@ -355,39 +357,11 @@ fun MessageBubble(
                         }
                     }
                     MessageType.AUDIO -> {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(4.dp)
-                                .clickable { openFileIntent(context, message.fileUri, message.fileType ?: "audio/*") }
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = contentColor.copy(alpha = 0.2f),
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = contentColor)
-                                }
-                            }
-                            Spacer(Modifier.width(10.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = message.fileName ?: "Audio",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(Modifier.height(2.dp))
-                                LinearProgressIndicator(
-                                    progress = { 0f },
-                                    modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-                                    color = contentColor,
-                                    trackColor = contentColor.copy(alpha = 0.3f)
-                                )
-                            }
-                        }
+                        AudioPlayerBubble(
+                            fileUriString = message.fileUri,
+                            fileName = message.fileName,
+                            contentColor = contentColor
+                        )
                     }
                     MessageType.FILE -> {
                         Surface(
@@ -507,5 +481,105 @@ fun AttachmentOption(icon: androidx.compose.ui.graphics.vector.ImageVector, labe
         }
         Spacer(Modifier.height(4.dp))
         Text(label, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+fun AudioPlayerBubble(
+    fileUriString: String?,
+    fileName: String?,
+    contentColor: Color
+) {
+    val context = LocalContext.current
+    var isPlaying by remember { mutableStateOf(false) }
+    var progress by remember { mutableFloatStateOf(0f) }
+    var mediaPlayer by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
+
+    DisposableEffect(fileUriString) {
+        onDispose {
+            try {
+                mediaPlayer?.stop()
+                mediaPlayer?.release()
+            } catch (e: Exception) {}
+            mediaPlayer = null
+        }
+    }
+
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) {
+            while (isPlaying && mediaPlayer != null) {
+                try {
+                    val mp = mediaPlayer
+                    if (mp != null && mp.isPlaying && mp.duration > 0) {
+                        progress = mp.currentPosition.toFloat() / mp.duration.toFloat()
+                    }
+                } catch (e: Exception) {
+                    isPlaying = false
+                }
+                kotlinx.coroutines.delay(200)
+            }
+        }
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(4.dp)
+    ) {
+        IconButton(
+            onClick = {
+                if (fileUriString == null) return@IconButton
+                try {
+                    if (isPlaying) {
+                        mediaPlayer?.pause()
+                        isPlaying = false
+                    } else {
+                        if (mediaPlayer == null) {
+                            val uri = Uri.parse(fileUriString)
+                            mediaPlayer = android.media.MediaPlayer().apply {
+                                setDataSource(context, uri)
+                                prepare()
+                                setOnCompletionListener {
+                                    isPlaying = false
+                                    progress = 0f
+                                }
+                            }
+                        }
+                        mediaPlayer?.start()
+                        isPlaying = true
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("AudioPlayerBubble", "Error playing audio", e)
+                    openFileIntent(context, fileUriString, "audio/*")
+                }
+            },
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(
+                if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                contentDescription = if (isPlaying) "Pausar" else "Reproducir",
+                tint = contentColor
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = fileName ?: "Audio",
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(4.dp))
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp)),
+                color = contentColor,
+                trackColor = contentColor.copy(alpha = 0.3f)
+            )
+        }
     }
 }

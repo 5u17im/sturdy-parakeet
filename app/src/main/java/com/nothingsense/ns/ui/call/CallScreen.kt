@@ -23,34 +23,58 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
+import androidx.compose.material.icons.rounded.Call
+import com.nothingsense.ns.ui.chat.ChatViewModel
+
 @Composable
 fun CallScreen(
     peerUsername: String,
     peerUserId: String,
     isIncoming: Boolean = false,
-    onAcceptCall: () -> Unit = {},
+    viewModel: ChatViewModel,
     onEndCall: () -> Unit
 ) {
     var isMuted by remember { mutableStateOf(false) }
     var isSpeakerOn by remember { mutableStateOf(true) }
+    var isCallConnected by remember { mutableStateOf(false) }
     var callDurationSeconds by remember { mutableStateOf(0) }
-    var callState by remember { mutableStateOf(if (isIncoming) "Llamada Entrante P2P..." else "Conectando llamada Mesh...") }
+    var callState by remember { mutableStateOf(if (isIncoming) "Llamada Entrante P2P..." else "Llamando P2P...") }
 
     val pulseAnim = remember { Animatable(1f) }
 
-    LaunchedEffect(Unit) {
+    // Observe incoming call signals (ACCEPT, END, REJECT)
+    LaunchedEffect(peerUserId) {
         if (!isIncoming) {
-            delay(1500)
-            callState = "Conectado P2P Cifrado"
+            // Outgoing call: Send OFFER signal to recipient
+            viewModel.sendCallSignal(peerUserId, "OFFER")
         }
+
+        viewModel.incomingCallEvents.collect { event ->
+            if (event.senderId == peerUserId) {
+                when (event.signal) {
+                    "ACCEPT" -> {
+                        callState = "Conectado P2P Cifrado"
+                        isCallConnected = true
+                        viewModel.startCallAudio(peerUserId)
+                    }
+                    "REJECT", "END" -> {
+                        viewModel.stopCallAudio()
+                        onEndCall()
+                    }
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
         while (true) {
             pulseAnim.animateTo(1.2f, animationSpec = tween(1000))
             pulseAnim.animateTo(1.0f, animationSpec = tween(1000))
         }
     }
 
-    LaunchedEffect(callState) {
-        if (callState == "Conectado P2P Cifrado") {
+    LaunchedEffect(isCallConnected) {
+        if (isCallConnected) {
             while (true) {
                 delay(1000)
                 callDurationSeconds++
@@ -126,58 +150,117 @@ fun CallScreen(
             Spacer(Modifier.weight(1f))
 
             // Controls
-            Row(
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Mute Mic
-                IconButton(
-                    onClick = { isMuted = !isMuted },
-                    modifier = Modifier
-                        .size(60.dp)
-                        .background(
-                            if (isMuted) Color.White else Color.White.copy(alpha = 0.2f),
-                            CircleShape
+            if (isIncoming && !isCallConnected) {
+                // Incoming call buttons: Accept or Reject
+                Row(
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // Reject Call
+                    IconButton(
+                        onClick = {
+                            viewModel.sendCallSignal(peerUserId, "REJECT")
+                            onEndCall()
+                        },
+                        modifier = Modifier
+                            .size(72.dp)
+                            .background(Color(0xFFD63031), CircleShape)
+                    ) {
+                        Icon(
+                            Icons.Rounded.CallEnd,
+                            contentDescription = "Rechazar",
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
                         )
-                ) {
-                    Icon(
-                        if (isMuted) Icons.Rounded.MicOff else Icons.Rounded.Mic,
-                        contentDescription = "Silenciar",
-                        tint = if (isMuted) Color.Black else Color.White
-                    )
-                }
+                    }
 
-                // End Call
-                IconButton(
-                    onClick = onEndCall,
-                    modifier = Modifier
-                        .size(72.dp)
-                        .background(Color(0xFFD63031), CircleShape)
-                ) {
-                    Icon(
-                        Icons.Rounded.CallEnd,
-                        contentDescription = "Colgar",
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-
-                // Speakerphone
-                IconButton(
-                    onClick = { isSpeakerOn = !isSpeakerOn },
-                    modifier = Modifier
-                        .size(60.dp)
-                        .background(
-                            if (isSpeakerOn) Color(0xFF00B894) else Color.White.copy(alpha = 0.2f),
-                            CircleShape
+                    // Accept Call
+                    IconButton(
+                        onClick = {
+                            viewModel.sendCallSignal(peerUserId, "ACCEPT")
+                            callState = "Conectado P2P Cifrado"
+                            isCallConnected = true
+                            viewModel.startCallAudio(peerUserId)
+                        },
+                        modifier = Modifier
+                            .size(72.dp)
+                            .background(Color(0xFF00B894), CircleShape)
+                    ) {
+                        Icon(
+                            Icons.Rounded.Call,
+                            contentDescription = "Contestar",
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
                         )
+                    }
+                }
+            } else {
+                // Active / Outgoing call controls
+                Row(
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(
-                        Icons.Rounded.VolumeUp,
-                        contentDescription = "Altavoz",
-                        tint = Color.White
-                    )
+                    // Mute Mic
+                    IconButton(
+                        onClick = {
+                            isMuted = !isMuted
+                            if (isMuted) {
+                                viewModel.stopCallAudio()
+                            } else {
+                                viewModel.startCallAudio(peerUserId)
+                            }
+                        },
+                        modifier = Modifier
+                            .size(60.dp)
+                            .background(
+                                if (isMuted) Color.White else Color.White.copy(alpha = 0.2f),
+                                CircleShape
+                            )
+                    ) {
+                        Icon(
+                            if (isMuted) Icons.Rounded.MicOff else Icons.Rounded.Mic,
+                            contentDescription = "Silenciar",
+                            tint = if (isMuted) Color.Black else Color.White
+                        )
+                    }
+
+                    // End Call
+                    IconButton(
+                        onClick = {
+                            viewModel.sendCallSignal(peerUserId, "END")
+                            viewModel.stopCallAudio()
+                            onEndCall()
+                        },
+                        modifier = Modifier
+                            .size(72.dp)
+                            .background(Color(0xFFD63031), CircleShape)
+                    ) {
+                        Icon(
+                            Icons.Rounded.CallEnd,
+                            contentDescription = "Colgar",
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+
+                    // Speakerphone
+                    IconButton(
+                        onClick = { isSpeakerOn = !isSpeakerOn },
+                        modifier = Modifier
+                            .size(60.dp)
+                            .background(
+                                if (isSpeakerOn) Color(0xFF00B894) else Color.White.copy(alpha = 0.2f),
+                                CircleShape
+                            )
+                    ) {
+                        Icon(
+                            Icons.Rounded.VolumeUp,
+                            contentDescription = "Altavoz",
+                            tint = Color.White
+                        )
+                    }
                 }
             }
 

@@ -121,14 +121,23 @@ class P2PAudioEngine @Inject constructor(
         }
     }
 
+    fun isRecording(): Boolean = isRecording
+
     fun stopRecording() {
         isRecording = false
         recordingJob?.cancel()
         recordingJob = null
     }
 
+    fun ensureAudioTrack() {
+        if (audioTrack == null || audioTrack?.state != AudioTrack.STATE_INITIALIZED) {
+            initAudioTrack()
+        }
+    }
+
     fun playAudioFrame(frame: ByteArray) {
         try {
+            ensureAudioTrack()
             val track = audioTrack ?: return
             if (track.playState != AudioTrack.PLAYSTATE_PLAYING) {
                 track.play()

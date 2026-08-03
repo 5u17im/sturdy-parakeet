@@ -45,6 +45,14 @@ fun NavGraph() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
+    LaunchedEffect(Unit) {
+        chatViewModel.incomingCallEvents.collect { event ->
+            if (event.signal == "OFFER") {
+                navController.navigate(Route.Call(event.senderId, event.senderName, isIncoming = true))
+            }
+        }
+    }
+
     if (onboardingCompleted == null) return
 
     Scaffold(
@@ -184,6 +192,7 @@ fun NavGraph() {
                     peerUsername = callRoute.username,
                     peerUserId = callRoute.userId,
                     isIncoming = callRoute.isIncoming,
+                    viewModel = chatViewModel,
                     onEndCall = { navController.popBackStack() }
                 )
             }
