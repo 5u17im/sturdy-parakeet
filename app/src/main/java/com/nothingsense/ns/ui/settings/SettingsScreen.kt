@@ -1,5 +1,6 @@
 package com.nothingsense.ns.ui.settings
 
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
@@ -267,23 +268,213 @@ fun SettingsScreen(
                 }
             )
 
-            // Security & Privacy Section
-            SettingsSectionHeader("SEGURIDAD Y PRIVACIDAD")
-            SettingsSwitchRow(
-                icon = Icons.Rounded.Fingerprint,
-                title = "Bloqueo Biométrico",
-                subtitle = "Requerir Huella/PIN para abrir la app",
-                checked = isBiometricEnabled,
-                onCheckedChange = { viewModel.setBiometricEnabled(it) }
-            )
+    val isFlagSecureEnabled by viewModel.flagSecureEnabled.collectAsState()
+    var showWipeDialog by remember { mutableStateOf(false) }
+    var showPassphraseDialog by remember { mutableStateOf(false) }
+    var backupMode by remember { mutableStateOf("EXPORT") } // "EXPORT" or "IMPORT"
+    var pendingBackupUri by remember { mutableStateOf<Uri?>(null) }
+    var passphraseText by remember { mutableStateOf("") }
 
-            SettingsSwitchRow(
-                icon = Icons.Rounded.Download,
-                title = "Descarga Automática Mesh",
-                subtitle = "Descargar archivos adjuntos automáticamente",
-                checked = isAutoDownloadEnabled,
-                onCheckedChange = { viewModel.setAutoDownloadEnabled(it) }
+    val createBackupLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri: Uri? ->
+        uri?.let {
+            pendingBackupUri = it
+            backupMode = "EXPORT"
+            passphraseText = ""
+            showPassphraseDialog = true
+        }
+    }
+
+    val importBackupLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            pendingBackupUri = it
+            backupMode = "IMPORT"
+            passphraseText = ""
+            showPassphraseDialog = true
+        }
+    }
+
+    // Security Wipe Confirmation Dialog
+    if (showWipeDialog) {
+        AlertDialog(
+            onDismissRequest = { showWipeDialog = false },
+            title = { Text("🚨 BORRADO DE SEGURIDAD DE EMERGENCIA", color = Color(0xFFD63031), fontWeight = FontWeight.Bold) },
+            text = { Text("Esta acción destruirá permanentemente tus conversaciones, mensajes, llaves criptográficas y preferencias locales. La app se reiniciará al estado de fábrica.\n\n¿Estás seguro de continuar?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showWipeDialog = false
+                        viewModel.executeEmergencyWipe {
+                            Toast.makeText(context, "Información destruida correctamente", Toast.LENGTH_LONG).show()
+                            onBack()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD63031))
+                ) {
+                    Text("SÍ, BORRAR TODO", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWipeDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // Passphrase Dialog for .nsbak Container
+    if (showPassphraseDialog) {
+        AlertDialog(
+            onDismissRequest = { showPassphraseDialog = false },
+            title = { Text(if (backupMode == "EXPORT") "🔒 Cifrar Respaldo (.nsbak)" else "🔓 Descifrar Respaldo (.nsbak)", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("Ingresa una contraseña para proteger el contenedor binario de respaldo:")
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = passphraseText,
+                        onValueChange = { passphraseText = it },
+                        label = { Text("Contraseña de Respaldo") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = passphraseText.isNotBlank(),
+                    onClick = {
+                        val uri = pendingBackupUri
+                        val pass = passphraseText
+                        showPassphraseDialog = false
+                        if (uri != null && pass.isNotBlank()) {
+                            if (backupMode == "EXPORT") {
+                                viewModel.exportBackup(uri, pass) { success ->
+                                    val msg = if (success) "Respaldo .nsbak guardado exitosamente" else "Fallo al exportar respaldo"
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                viewModel.importBackup(uri, pass) { success ->
+                                    val msg = if (success) "Respaldo .nsbak restaurado exitosamente" else "Contraseña incorrecta o archivo dañado"
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    }
+                ) {
+                    Text(if (backupMode == "EXPORT") "Exportar .nsbak" else "Restaurar .nsbak")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPassphraseDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // Security & Privacy Section
+    SettingsSectionHeader("SEGURIDAD Y PRIVACIDAD FÍSICA")
+    SettingsSwitchRow(
+        icon = Icons.Rounded.Fingerprint,
+        title = "Bloqueo Biométrico",
+        subtitle = "Requerir Huella/PIN para abrir la app",
+        checked = isBiometricEnabled,
+        onCheckedChange = { viewModel.setBiometricEnabled(it) }
+    )
+
+    SettingsSwitchRow(
+        icon = Icons.Rounded.Download,
+        title = "Protección Anti-Capturas (FLAG_SECURE)",
+        subtitle = "Bloquear capturas de pantalla y ocultar en multitarea",
+        checked = isFlagSecureEnabled,
+        onCheckedChange = { viewModel.setFlagSecureEnabled(it) }
+    )
+
+    SettingsSwitchRow(
+        icon = Icons.Rounded.Download,
+        title = "Descarga Automática Mesh",
+        subtitle = "Descargar archivos adjuntos automáticamente",
+        checked = isAutoDownloadEnabled,
+        onCheckedChange = { viewModel.setAutoDownloadEnabled(it) }
+    )
+
+    // Backup & Restore Section
+    SettingsSectionHeader("PERMANENCIA DE DATOS Y RESPALDOS")
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Contenedor Cifrado (.nsbak)",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
             )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Exporta o importa tus conversaciones e identidad en un formato binario propietario inmune a lectura externa.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Button(
+                    onClick = { createBackupLauncher.launch("nosense_backup_${System.currentTimeMillis()}.nsbak") },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Exportar .nsbak", fontWeight = FontWeight.Bold)
+                }
+                OutlinedButton(
+                    onClick = { importBackupLauncher.launch("*/*") },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Importar .nsbak", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+
+    // Emergency Wipe Section
+    SettingsSectionHeader("ZONA DE EMERGENCIA")
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = Color(0xFFD63031).copy(alpha = 0.15f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Autodestrucción / Borrado Seguro",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFD63031)
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Destruye permanentemente todos los chats, llaves criptográficas y datos del dispositivo sin posibilidad de recuperación.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = { showWipeDialog = true },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD63031)),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("💥 Borrar Toda la Información de Seguridad", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
 
             // App Version Footer
             Spacer(Modifier.height(12.dp))

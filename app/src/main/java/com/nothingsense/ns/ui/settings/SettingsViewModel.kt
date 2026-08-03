@@ -14,11 +14,23 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import android.net.Uri
+import com.nothingsense.ns.data.backup.BackupRestoreManager
+import com.nothingsense.ns.security.SecurityWipeManager
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val identityManager: IdentityManager,
-    private val updateManager: UpdateManager
+    private val updateManager: UpdateManager,
+    private val securityWipeManager: SecurityWipeManager,
+    private val backupRestoreManager: BackupRestoreManager
 ) : ViewModel() {
+
+    val flagSecureEnabled: StateFlow<Boolean> = identityManager.flagSecureEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val duressPin: StateFlow<String?> = identityManager.duressPinFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val userId: StateFlow<String?> = identityManager.userIdFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -80,6 +92,39 @@ class SettingsViewModel @Inject constructor(
     fun setThemeMode(theme: String) {
         viewModelScope.launch {
             identityManager.setThemeMode(theme)
+        }
+    }
+
+    fun setFlagSecureEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            identityManager.setFlagSecureEnabled(enabled)
+        }
+    }
+
+    fun setDuressPin(pin: String?) {
+        viewModelScope.launch {
+            identityManager.setDuressPin(pin)
+        }
+    }
+
+    fun executeEmergencyWipe(onComplete: () -> Unit) {
+        viewModelScope.launch {
+            securityWipeManager.wipeAllAppData()
+            onComplete()
+        }
+    }
+
+    fun exportBackup(targetUri: Uri, passphrase: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val success = backupRestoreManager.exportBackupToUri(targetUri, passphrase)
+            onResult(success)
+        }
+    }
+
+    fun importBackup(sourceUri: Uri, passphrase: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val success = backupRestoreManager.importBackupFromUri(sourceUri, passphrase)
+            onResult(success)
         }
     }
 

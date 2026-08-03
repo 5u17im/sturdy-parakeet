@@ -29,6 +29,8 @@ class IdentityManager @Inject constructor(
     private val BIOMETRIC_ENABLED_KEY = booleanPreferencesKey("biometric_enabled")
     private val AUTO_DOWNLOAD_KEY = booleanPreferencesKey("auto_download_enabled")
     private val THEME_MODE_KEY = stringPreferencesKey("theme_mode")
+    private val FLAG_SECURE_KEY = booleanPreferencesKey("flag_secure_enabled")
+    private val DURESS_PIN_KEY = stringPreferencesKey("duress_pin")
 
     val userIdFlow: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[USER_ID_KEY]
@@ -56,6 +58,14 @@ class IdentityManager @Inject constructor(
 
     val autoDownloadFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[AUTO_DOWNLOAD_KEY] ?: true
+    }
+
+    val flagSecureEnabledFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[FLAG_SECURE_KEY] ?: false
+    }
+
+    val duressPinFlow: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[DURESS_PIN_KEY]
     }
 
     val themeModeFlow: Flow<String> = context.dataStore.data.map { preferences ->
@@ -111,6 +121,19 @@ class IdentityManager @Inject constructor(
     suspend fun setThemeMode(theme: String) {
         context.dataStore.edit { preferences ->
             preferences[THEME_MODE_KEY] = theme
+        }
+    }
+
+    suspend fun setFlagSecureEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[FLAG_SECURE_KEY] = enabled
+        }
+    }
+
+    suspend fun setDuressPin(pin: String?) {
+        context.dataStore.edit { preferences ->
+            if (pin != null) preferences[DURESS_PIN_KEY] = pin
+            else preferences.remove(DURESS_PIN_KEY)
         }
     }
 

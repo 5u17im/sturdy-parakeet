@@ -15,12 +15,36 @@ import com.nothingsense.ns.ui.navigation.NavGraph
 import com.nothingsense.ns.ui.theme.NoSenseTheme
 import dagger.hilt.android.AndroidEntryPoint
 
+import android.view.WindowManager
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import com.nothingsense.ns.data.identity.IdentityManager
+import javax.inject.Inject
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var identityManager: IdentityManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
+            val isFlagSecureEnabled by identityManager.flagSecureEnabledFlow.collectAsState(initial = false)
+
+            LaunchedEffect(isFlagSecureEnabled) {
+                if (isFlagSecureEnabled) {
+                    window.setFlags(
+                        WindowManager.LayoutParams.FLAG_SECURE,
+                        WindowManager.LayoutParams.FLAG_SECURE
+                    )
+                } else {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                }
+            }
+
             NoSenseTheme {
                 NavGraph()
             }
