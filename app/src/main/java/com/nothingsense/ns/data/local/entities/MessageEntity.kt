@@ -17,7 +17,9 @@ data class MessageEntity(
     val status: DeliveryStatus = DeliveryStatus.SENT,
     val replyToMessageId: String? = null,
     val reactions: String? = null,
-    val autoDeleteAt: Long? = null
+    val autoDeleteAt: Long? = null,
+    val isEdited: Boolean = false,
+    val isRevoked: Boolean = false
 )
 
 enum class MessageType {

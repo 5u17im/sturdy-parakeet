@@ -27,4 +27,13 @@ interface MessageDao {
 
     @Query("DELETE FROM messages WHERE autoDeleteAt IS NOT NULL AND autoDeleteAt < :currentTime")
     suspend fun deleteExpiredMessages(currentTime: Long)
+
+    @Query("SELECT * FROM messages WHERE text LIKE '%' || :query || '%' ORDER BY timestamp DESC")
+    fun searchMessages(query: String): Flow<List<MessageEntity>>
+
+    @Query("UPDATE messages SET text = :newText, isEdited = 1 WHERE id = :messageId")
+    suspend fun updateMessageText(messageId: String, newText: String)
+
+    @Query("UPDATE messages SET text = 'Este mensaje fue eliminado', isRevoked = 1 WHERE id = :messageId")
+    suspend fun revokeMessage(messageId: String)
 }

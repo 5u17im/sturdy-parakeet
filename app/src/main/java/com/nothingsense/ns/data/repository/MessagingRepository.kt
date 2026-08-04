@@ -169,6 +169,12 @@ class MessagingRepository @Inject constructor(
             PacketType.CHANNEL_MESSAGE -> {
                 saveMessage(packet, "PUBLIC_CHANNEL", "Canal Público")
             }
+            PacketType.EDIT_MESSAGE -> {
+                messageDao.updateMessageText(packet.content, packet.signature ?: "")
+            }
+            PacketType.REVOKE_MESSAGE -> {
+                messageDao.revokeMessage(packet.content)
+            }
             PacketType.FILE_TRANSFER -> {
                 handleIncomingFile(packet)
             }
@@ -580,5 +586,36 @@ class MessagingRepository @Inject constructor(
         } catch (e: Exception) {
             android.util.Log.e("MessagingRepository", "Error marking chat as read", e)
         }
+    }
+
+    fun searchMessages(query: String): Flow<List<MessageEntity>> = messageDao.searchMessages(query)
+
+    suspend fun editMessage(chatId: String, messageId: String, newText: String) {
+        val userId = identityManager.getOrCreateUserId()
+        val username = identityManager.getUsername()
+        messageDao.updateMessageText(messageId, newText)
+        val packet = MeshPacket(
+            senderId = userId,
+            senderName = username,
+            recipientId = chatId,
+            type = PacketType.EDIT_MESSAGE,
+            content = messageId,
+            signature = newText
+        )
+        transportManager.sendPacket(packet, chatId)
+    }
+
+    suspend fun revokeMessage(chatId: String, messageId: String) {
+        val userId = identityManager.getOrCreateUserId()
+        val username = identityManager.getUsername()
+        messageDao.revokeMessage(messageId)
+        val packet = MeshPacket(
+            senderId = userId,
+            senderName = username,
+            recipientId = chatId,
+            type = PacketType.REVOKE_MESSAGE,
+            content = messageId
+        )
+        transportManager.sendPacket(packet, chatId)
     }
 }
