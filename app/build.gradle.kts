@@ -14,8 +14,8 @@ android {
         applicationId = "com.nothingsense.ns"
         minSdk = 33
         targetSdk = 37
-        versionCode = 140
-        versionName = "1.4.0"
+        versionCode = 141
+        versionName = "1.4.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
