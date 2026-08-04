@@ -70,6 +70,22 @@ class MeshManager @Inject constructor(
             
             startAdvertising(endpointName)
             startDiscovery()
+            startAutoReconnectWorker()
+        }
+    }
+
+    private fun startAutoReconnectWorker() {
+        scope.launch {
+            while (isMeshStarted) {
+                kotlinx.coroutines.delay(12000)
+                val discovered = _discoveredNodes.value
+                val connected = _connectedNodes.value
+                val disconnectedEndpoints = discovered.keys.filter { it !in connected.keys }
+                for (endpointId in disconnectedEndpoints) {
+                    Log.d(TAG, "[AUTO-RECONNECT] Attempting auto-reconnect to discovered endpoint: $endpointId")
+                    connectToNode(endpointId)
+                }
+            }
         }
     }
 
@@ -268,15 +284,33 @@ class MeshManager @Inject constructor(
                     ttl = packet.ttl - 1,
                     hopCount = packet.hopCount + 1
                 )
-                val otherEndpoints = _connectedNodes.value.keys.filter { it != endpointId }
-                if (otherEndpoints.isNotEmpty()) {
+                val recipientId = packet.recipientId
+                val directTargetEndpoint = if (recipientId != null) {
+                    _connectedNodes.value.values.find { it.userId == recipientId && it.endpointId != endpointId }?.endpointId
+                } else null
+
+                if (directTargetEndpoint != null) {
+                    // Directed Unicast Relay to known directly connected recipient
                     try {
                         val json = Json.encodeToString(relayedPacket)
                         val payload = Payload.fromBytes(json.toByteArray())
-                        connectionsClient.sendPayload(otherEndpoints, payload)
-                        Log.d(TAG, "Relayed packet ${packet.packetId} to ${otherEndpoints.size} nodes (Hops: ${relayedPacket.hopCount})")
+                        connectionsClient.sendPayload(directTargetEndpoint, payload)
+                        Log.d(TAG, "Unicast relayed packet ${packet.packetId} directly to node $directTargetEndpoint")
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error relaying packet", e)
+                        Log.e(TAG, "Error unicast relaying packet", e)
+                    }
+                } else {
+                    // Broadcast Relay to all other neighbors
+                    val otherEndpoints = _connectedNodes.value.keys.filter { it != endpointId }
+                    if (otherEndpoints.isNotEmpty()) {
+                        try {
+                            val json = Json.encodeToString(relayedPacket)
+                            val payload = Payload.fromBytes(json.toByteArray())
+                            connectionsClient.sendPayload(otherEndpoints, payload)
+                            Log.d(TAG, "Relayed packet ${packet.packetId} to ${otherEndpoints.size} nodes (Hops: ${relayedPacket.hopCount})")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error relaying packet", e)
+                        }
                     }
                 }
             }

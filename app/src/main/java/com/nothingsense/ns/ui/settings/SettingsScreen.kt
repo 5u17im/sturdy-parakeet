@@ -50,6 +50,9 @@ fun SettingsScreen(
     val updateInfo by viewModel.updateInfoState.collectAsState()
     val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsState()
 
+    val isCloudConnected by viewModel.transportManager.isCloudConnected.collectAsState()
+    val connectedLocalNodes by viewModel.transportManager.connectedLocalNodes.collectAsState()
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
@@ -250,6 +253,105 @@ fun SettingsScreen(
                             Text("Buscando en GitHub Releases...")
                         } else {
                             Text("Buscar Actualizaciones")
+                        }
+                    }
+                }
+            }
+
+            // Network Interconnectivity & Server Status Section
+            SettingsSectionHeader("ESTADO DE RED E INTERCONEXIÓN")
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    // Cloud Relay Status
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isCloudConnected) Color(0xFF00B894).copy(alpha = 0.15f) else Color(0xFFD63031).copy(alpha = 0.15f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (isCloudConnected) Color(0xFF00B894) else Color(0xFFD63031),
+                                    modifier = Modifier.size(12.dp)
+                                ) {}
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Servidor Relay Cloud 24/7",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = if (isCloudConnected) "wss://nosense.onrender.com/ws (Conectado)" else "Reconectando con la Nube...",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isCloudConnected) Color(0xFF00B894) else Color(0xFFD63031)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // Local P2P Mesh Status
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Rounded.Person,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Nodos Mesh P2P Cercanos",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "${connectedLocalNodes.size} pares conectados directamente",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // Gateway Bridge Status
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(10.dp)
+                        ) {
+                            Text(
+                                text = "🌉 Pasarela (Gateway): Activa. Si un par cercano no tiene internet, puenteamos sus mensajes a la Nube automáticamente.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
                         }
                     }
                 }

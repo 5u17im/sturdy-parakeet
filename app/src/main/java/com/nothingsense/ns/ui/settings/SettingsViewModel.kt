@@ -18,12 +18,15 @@ import android.net.Uri
 import com.nothingsense.ns.data.backup.BackupRestoreManager
 import com.nothingsense.ns.security.SecurityWipeManager
 
+import com.nothingsense.ns.network.HybridTransportManager
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val identityManager: IdentityManager,
     private val updateManager: UpdateManager,
     private val securityWipeManager: SecurityWipeManager,
-    private val backupRestoreManager: BackupRestoreManager
+    private val backupRestoreManager: BackupRestoreManager,
+    val transportManager: HybridTransportManager
 ) : ViewModel() {
 
     val flagSecureEnabled: StateFlow<Boolean> = identityManager.flagSecureEnabledFlow

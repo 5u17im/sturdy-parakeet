@@ -26,7 +26,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "CloudRelayClient"
-private const val DEFAULT_RELAY_URL = "wss://relay.nothingsense.app/ws"
+private const val DEFAULT_RELAY_URL = "wss://nosense.onrender.com/ws"
 
 @Singleton
 class CloudRelayClient @Inject constructor(
@@ -76,6 +76,7 @@ class CloudRelayClient @Inject constructor(
                     override fun onOpen(webSocket: WebSocket, response: Response) {
                         Log.d(TAG, "Cloud Relay WebSocket Connected to $currentRelayUrl")
                         _isConnected.value = true
+                        reconnectDelayMs = 5000L // Reset backoff on clean connection
                     }
 
                     override fun onMessage(webSocket: WebSocket, text: String) {
@@ -113,12 +114,15 @@ class CloudRelayClient @Inject constructor(
         }
     }
 
+    private var reconnectDelayMs = 5000L
+
     private fun scheduleReconnect() {
         if (isExplicitlyStopped) return
         scope.launch {
-            delay(5000)
+            delay(reconnectDelayMs)
+            reconnectDelayMs = (reconnectDelayMs * 2).coerceAtMost(60000L)
             if (!isExplicitlyStopped && !_isConnected.value) {
-                Log.d(TAG, "Attempting Cloud Relay reconnection...")
+                Log.d(TAG, "Attempting Cloud Relay reconnection (backoff: ${reconnectDelayMs}ms)...")
                 connectWebSocket()
             }
         }

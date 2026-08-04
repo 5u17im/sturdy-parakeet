@@ -83,6 +83,26 @@ class MessagingRepository @Inject constructor(
                 flushPendingMessages(node.userId)
             }
         }
+        scope.launch {
+            transportManager.isCloudConnected.collect { isConnected ->
+                if (isConnected) {
+                    flushAllPendingMessages()
+                }
+            }
+        }
+    }
+
+    suspend fun flushAllPendingMessages() {
+        try {
+            val allChats = chatDao.getAllChatsOneShot()
+            for (chat in allChats) {
+                if (chat.id != "PUBLIC_CHANNEL") {
+                    flushPendingMessages(chat.id)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MessagingRepository", "Error flushing all pending messages", e)
+        }
     }
 
     private suspend fun sendHandshake(targetUserId: String) {
