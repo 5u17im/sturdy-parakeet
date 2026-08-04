@@ -22,8 +22,15 @@ import androidx.compose.runtime.getValue
 import com.nothingsense.ns.data.identity.IdentityManager
 import javax.inject.Inject
 
+import androidx.fragment.app.FragmentActivity
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.nothingsense.ns.security.BiometricAuthManager
+import com.nothingsense.ns.ui.security.BiometricLockOverlayScreen
+
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     @Inject
     lateinit var identityManager: IdentityManager
@@ -33,6 +40,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val isFlagSecureEnabled by identityManager.flagSecureEnabledFlow.collectAsState(initial = false)
+            val isBiometricEnabled by identityManager.biometricEnabledFlow.collectAsState(initial = false)
+            var isAppUnlocked by remember { mutableStateOf(false) }
 
             LaunchedEffect(isFlagSecureEnabled) {
                 if (isFlagSecureEnabled) {
@@ -45,8 +54,26 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            LaunchedEffect(isBiometricEnabled) {
+                if (isBiometricEnabled && !isAppUnlocked) {
+                    BiometricAuthManager.promptBiometricAuth(
+                        activity = this@MainActivity,
+                        title = "Desbloquear NoSense",
+                        subtitle = "Escanea tu huella dactilar para acceder a tus chats",
+                        onSuccess = { isAppUnlocked = true },
+                        onError = { _ -> }
+                    )
+                }
+            }
+
             NoSenseTheme {
-                NavGraph()
+                if (isBiometricEnabled && !isAppUnlocked) {
+                    BiometricLockOverlayScreen(
+                        onUnlockSuccess = { isAppUnlocked = true }
+                    )
+                } else {
+                    NavGraph()
+                }
             }
         }
     }

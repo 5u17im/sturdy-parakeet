@@ -154,8 +154,11 @@ fun ChatListScreen(
     }
 
     if (showDiscoverDialog) {
+        val currentUserId by viewModel.userId.collectAsState()
         AddUserScreen(
             discoveredNodes = discoveredNodes,
+            currentUserId = currentUserId ?: "",
+            currentUsername = "Usuario",
             onAddUser = { userId, username ->
                 viewModel.createPrivateChat(userId, username)
             },

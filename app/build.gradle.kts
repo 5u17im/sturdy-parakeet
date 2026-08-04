@@ -14,8 +14,8 @@ android {
         applicationId = "com.nothingsense.ns"
         minSdk = 33
         targetSdk = 37
-        versionCode = 131
-        versionName = "1.3.1"
+        versionCode = 140
+        versionName = "1.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -79,6 +79,8 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.play.services.nearby)
     implementation(libs.retrofit)
+    implementation("androidx.biometric:biometric:1.1.0")
+    implementation("com.google.zxing:core:3.5.3")
     implementation(libs.hilt.android)
     "ksp"(libs.hilt.compiler)
     testImplementation(libs.androidx.core)

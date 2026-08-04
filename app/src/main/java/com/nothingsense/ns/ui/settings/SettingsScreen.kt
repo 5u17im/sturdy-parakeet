@@ -482,10 +482,28 @@ fun SettingsScreen(
     SettingsSectionHeader("SEGURIDAD Y PRIVACIDAD FÍSICA")
     SettingsSwitchRow(
         icon = Icons.Rounded.Fingerprint,
-        title = "Bloqueo Biométrico",
-        subtitle = "Requerir Huella/PIN para abrir la app",
+        title = "Bloqueo por Huella Dactilar",
+        subtitle = "Requerir Huella o Rostro para desbloquear NoSense",
         checked = isBiometricEnabled,
-        onCheckedChange = { viewModel.setBiometricEnabled(it) }
+        onCheckedChange = { enable ->
+            val activity = context as? androidx.fragment.app.FragmentActivity
+            if (activity != null && com.nothingsense.ns.security.BiometricAuthManager.canAuthenticate(context)) {
+                com.nothingsense.ns.security.BiometricAuthManager.promptBiometricAuth(
+                    activity = activity,
+                    title = if (enable) "Vincular Huella Dactilar" else "Desactivar Bloqueo por Huella",
+                    subtitle = "Escanea tu huella para confirmar la configuración",
+                    onSuccess = {
+                        viewModel.setBiometricEnabled(enable)
+                        Toast.makeText(context, if (enable) "Huella dactilar activada correctamente" else "Bloqueo por huella desactivado", Toast.LENGTH_SHORT).show()
+                    },
+                    onError = { err ->
+                        Toast.makeText(context, "Verificación de huella fallida: $err", Toast.LENGTH_SHORT).show()
+                    }
+                )
+            } else {
+                Toast.makeText(context, "Hardware de huella dactilar no disponible en este dispositivo", Toast.LENGTH_LONG).show()
+            }
+        }
     )
 
     SettingsSwitchRow(

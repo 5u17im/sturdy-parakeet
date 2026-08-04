@@ -238,6 +238,56 @@ fun ProfileScreen(
                     )
                 }
             }
+
+            Spacer(Modifier.height(20.dp))
+
+            // Real QR Code Card
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceColorAtElevation(4.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(20.dp)
+                ) {
+                    Text(
+                        text = "Código QR de Contacto",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    val qrJsonPayload = remember(userId, username) {
+                        "{\"v\":1,\"userId\":\"$userId\",\"username\":\"$username\"}"
+                    }
+                    val qrBitmap = remember(qrJsonPayload) {
+                        com.nothingsense.ns.ui.qr.QRCodeGenerator.generateQRCodeImageBitmap(qrJsonPayload, 512, 512)
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color.White,
+                        modifier = Modifier.size(180.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(12.dp)) {
+                            if (qrBitmap != null) {
+                                androidx.compose.foundation.Image(
+                                    bitmap = qrBitmap,
+                                    contentDescription = "Código QR Miembro",
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = "Escanea para agregar instantáneamente como contacto Mesh",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }

@@ -1,8 +1,7 @@
 package com.nothingsense.ns.ui.chat
 
-import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,56 +9,55 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.PersonAdd
-import androidx.compose.material.icons.rounded.QrCode
-import androidx.compose.material.icons.rounded.Radar
-import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nothingsense.ns.R
 import com.nothingsense.ns.network.model.MeshNode
+import com.nothingsense.ns.ui.qr.QRCodeGenerator
+import com.nothingsense.ns.ui.qr.QRCodeScannerDialog
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddUserScreen(
     discoveredNodes: List<MeshNode>,
+    currentUserId: String = "",
+    currentUsername: String = "",
     onAddUser: (userId: String, username: String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(0) }
     var inputUserId by remember { mutableStateOf("") }
     var inputUsername by remember { mutableStateOf("") }
-    val clipboardManager = LocalClipboardManager.current
-    val context = LocalContext.current
+    var showQRScanner by remember { mutableStateOf(false) }
 
-    val tabs = listOf("Cercanos P2P", "Buscar ID / Nombre", "Mi Código QR")
+    val qrJsonPayload = remember(currentUserId, currentUsername) {
+        "{\"v\":1,\"userId\":\"$currentUserId\",\"username\":\"$currentUsername\"}"
+    }
+
+    val qrImageBitmap = remember(qrJsonPayload) {
+        QRCodeGenerator.generateQRCodeImageBitmap(qrJsonPayload, 512, 512)
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(28.dp),
         title = {
             Row(
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "Agregar Usuario",
+                    "Agregar Contacto Mesh",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp
+                    fontSize = 18.sp
                 )
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Rounded.Close, contentDescription = "Cerrar")
@@ -67,25 +65,27 @@ fun AddUserScreen(
             }
         },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column {
                 TabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = Color.Transparent,
                     contentColor = MaterialTheme.colorScheme.primary
                 ) {
-                    tabs.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            text = {
-                                Text(
-                                    title,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
-                                )
-                            }
-                        )
-                    }
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("Cercanos") }
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text("Buscar") }
+                    )
+                    Tab(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        text = { Text("Mi QR") }
+                    )
                 }
 
                 Spacer(Modifier.height(16.dp))
@@ -94,36 +94,26 @@ fun AddUserScreen(
                     0 -> {
                         // Nearby P2P Nodes
                         if (discoveredNodes.isEmpty()) {
-                            Box(
-                                contentAlignment = Alignment.Center,
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(160.dp)
+                                    .padding(vertical = 20.dp),
+                                horizontalArrangement = Arrangement.Center
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(
-                                        Icons.Rounded.Radar,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(44.dp),
-                                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                                    )
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(
-                                        "Buscando nodos P2P cercanos...",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(12.dp))
+                                Text("Buscando pares en el radio Mesh...", style = MaterialTheme.typography.bodyMedium)
                             }
                         } else {
                             LazyColumn(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.heightIn(max = 220.dp)
+                                modifier = Modifier.heightIn(max = 240.dp)
                             ) {
                                 items(discoveredNodes) { node ->
                                     Surface(
-                                        shape = RoundedCornerShape(16.dp),
-                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
@@ -137,14 +127,14 @@ fun AddUserScreen(
                                         ) {
                                             Surface(
                                                 shape = CircleShape,
-                                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                                color = MaterialTheme.colorScheme.primaryContainer,
                                                 modifier = Modifier.size(40.dp)
                                             ) {
                                                 Box(contentAlignment = Alignment.Center) {
                                                     Text(
-                                                        node.username.take(1).uppercase(),
+                                                        text = node.username.take(1).uppercase(),
                                                         fontWeight = FontWeight.Bold,
-                                                        color = MaterialTheme.colorScheme.primary
+                                                        color = MaterialTheme.colorScheme.onPrimaryContainer
                                                     )
                                                 }
                                             }
@@ -212,30 +202,47 @@ fun AddUserScreen(
                         }
                     }
                     2 -> {
-                        // QR Code View
+                        // Real Dynamic QR Code View & Camera Scanner Button
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                modifier = Modifier.padding(16.dp).size(140.dp)
+                                shape = RoundedCornerShape(20.dp),
+                                color = Color.White,
+                                modifier = Modifier
+                                    .padding(8.dp)
+                                    .size(180.dp)
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        Icons.Rounded.QrCode,
-                                        contentDescription = "Código QR",
-                                        modifier = Modifier.size(100.dp),
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(12.dp)) {
+                                    if (qrImageBitmap != null) {
+                                        Image(
+                                            bitmap = qrImageBitmap,
+                                            contentDescription = "Código QR NoSense",
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    } else {
+                                        CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                                    }
                                 }
                             }
+                            Spacer(Modifier.height(8.dp))
                             Text(
-                                "Muestra este código a tu contacto para conectarse por el Mesh de NoSense.",
+                                "Muestra este QR o escanea el de tu contacto.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            Spacer(Modifier.height(14.dp))
+                            Button(
+                                onClick = { showQRScanner = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Icon(Icons.Rounded.QrCodeScanner, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Escanear QR con Cámara", fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
@@ -243,4 +250,14 @@ fun AddUserScreen(
         },
         confirmButton = {}
     )
+
+    if (showQRScanner) {
+        QRCodeScannerDialog(
+            onScanResult = { userId, username ->
+                onAddUser(userId, username)
+                onDismiss()
+            },
+            onDismiss = { showQRScanner = false }
+        )
+    }
 }
