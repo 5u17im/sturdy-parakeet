@@ -25,7 +25,8 @@ data class MeshPacket(
     val signature: String? = null,
     val fileMetadata: FileMetadata? = null,
     val replyToMessageId: String? = null,
-    val autoDeleteSeconds: Long? = null
+    val autoDeleteSeconds: Long? = null,
+    val proofOfWorkNonce: Long? = null
 )
 
 enum class PacketType {
