@@ -79,6 +79,12 @@ class ChatViewModel @Inject constructor(
     val incomingCallEvents = repository.incomingCallEvents
     val incomingAudioStreams = repository.incomingAudioStreams
 
+    fun markChatAsRead(chatId: String) {
+        viewModelScope.launch {
+            repository.markChatAsRead(chatId)
+        }
+    }
+
     fun sendFile(chatId: String, uri: android.net.Uri) {
         viewModelScope.launch {
             repository.sendFile(chatId, uri)

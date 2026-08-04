@@ -35,6 +35,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 import com.nothingsense.ns.security.CryptoManager
+import com.nothingsense.ns.notification.NotificationMaskManager
+import com.nothingsense.ns.data.local.entities.DeliveryStatus
+import kotlinx.coroutines.flow.firstOrNull
 
 data class CallSignalEvent(
     val senderId: String,
@@ -50,7 +53,8 @@ class MessagingRepository @Inject constructor(
     val transportManager: HybridTransportManager,
     private val identityManager: IdentityManager,
     val audioEngine: P2PAudioEngine,
-    private val cryptoManager: CryptoManager
+    private val cryptoManager: CryptoManager,
+    private val notificationMaskManager: NotificationMaskManager
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -552,5 +556,29 @@ class MessagingRepository @Inject constructor(
             timestamp = System.currentTimeMillis()
         )
         transportManager.sendPacket(packet, targetUserId)
+    }
+
+    suspend fun markChatAsRead(chatId: String) {
+        if (chatId == "PUBLIC_CHANNEL") return
+        try {
+            val currentUserId = identityManager.getOrCreateUserId()
+            val currentUsername = identityManager.getUsername()
+            val messages = messageDao.getMessagesForChat(chatId).firstOrNull() ?: return
+            for (msg in messages) {
+                if (msg.senderId != currentUserId && msg.status != DeliveryStatus.READ) {
+                    val ackReadPacket = MeshPacket(
+                        senderId = currentUserId,
+                        senderName = currentUsername,
+                        recipientId = chatId,
+                        type = PacketType.ACK_READ,
+                        content = msg.id
+                    )
+                    transportManager.sendPacket(ackReadPacket, chatId)
+                    messageDao.updateMessageStatus(msg.id, DeliveryStatus.READ)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MessagingRepository", "Error marking chat as read", e)
+        }
     }
 }

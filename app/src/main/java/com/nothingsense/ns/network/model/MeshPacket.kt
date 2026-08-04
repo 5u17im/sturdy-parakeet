@@ -23,7 +23,9 @@ data class MeshPacket(
     val ttl: Int = 10,
     val hopCount: Int = 0,
     val signature: String? = null,
-    val fileMetadata: FileMetadata? = null
+    val fileMetadata: FileMetadata? = null,
+    val replyToMessageId: String? = null,
+    val autoDeleteSeconds: Long? = null
 )
 
 enum class PacketType {
@@ -36,5 +38,10 @@ enum class PacketType {
     STICKER,
     AUDIO_STREAM,
     CALL_SIGNAL,
-    USER_REPORT
+    USER_REPORT,
+    ACK_DELIVERY,
+    ACK_READ,
+    EMOJI_REACTION,
+    EDIT_MESSAGE,
+    REVOKE_MESSAGE
 }

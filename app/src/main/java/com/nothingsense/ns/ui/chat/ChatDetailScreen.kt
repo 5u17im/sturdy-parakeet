@@ -71,6 +71,10 @@ fun ChatDetailScreen(
         }
     }
 
+    LaunchedEffect(chatId) {
+        viewModel.markChatAsRead(chatId)
+    }
+
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
@@ -406,16 +410,51 @@ fun MessageBubble(
                         }
                     }
                 }
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontSize = 10.sp,
-                    modifier = Modifier.align(Alignment.End).alpha(0.7f)
-                )
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text(
+                        text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 10.sp,
+                        color = contentColor.copy(alpha = 0.7f)
+                    )
+                    if (isMe) {
+                        Spacer(Modifier.width(4.dp))
+                        GeometricStatusIcon(status = message.status, contentColor = contentColor)
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+fun GeometricStatusIcon(
+    status: com.nothingsense.ns.data.local.entities.DeliveryStatus,
+    contentColor: Color
+) {
+    val symbol = when (status) {
+        com.nothingsense.ns.data.local.entities.DeliveryStatus.PENDING -> "◯"
+        com.nothingsense.ns.data.local.entities.DeliveryStatus.SENT -> "●"
+        com.nothingsense.ns.data.local.entities.DeliveryStatus.DELIVERED -> "☐"
+        com.nothingsense.ns.data.local.entities.DeliveryStatus.READ -> "■"
+    }
+
+    val color = when (status) {
+        com.nothingsense.ns.data.local.entities.DeliveryStatus.READ -> Color(0xFF00B894)
+        else -> contentColor.copy(alpha = 0.8f)
+    }
+
+    Text(
+        text = symbol,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.ExtraBold,
+        color = color
+    )
 }
 
 private fun openFileIntent(context: Context, fileUriString: String?, mimeType: String?) {

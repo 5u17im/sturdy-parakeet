@@ -2,14 +2,21 @@ package com.nothingsense.ns.ui.navigation
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Chat
+import androidx.compose.material.icons.automirrored.rounded.Chat
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Campaign
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.nothingsense.ns.R
@@ -63,31 +70,60 @@ fun NavGraph() {
                 currentDestination?.hasRoute<Route.Profile>() == false &&
                 currentDestination?.hasRoute<Route.Call>() == false &&
                 currentDestination?.hasRoute<Route.PeerProfile>() == false) {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
-                    tonalElevation = 0.dp
-                ) {
-                    val items = listOf(
-                        Triple(stringResource(R.string.chats), Route.ChatList, Icons.Rounded.Chat),
-                        Triple(stringResource(R.string.status), Route.StatusList, Icons.Rounded.History),
-                        Triple(stringResource(R.string.channels), Route.Channels, Icons.Rounded.Campaign),
-                        Triple(stringResource(R.string.settings), Route.Settings, Icons.Rounded.Settings)
-                    )
-                    items.forEach { (label, route, icon) ->
-                        NavigationBarItem(
-                            icon = { Icon(icon, contentDescription = label) },
-                            label = { Text(label) },
-                            selected = currentDestination.hierarchy.any { it.hasRoute(route::class) },
-                            onClick = {
-                                navController.navigate(route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
+                Surface(
+                    shape = RoundedCornerShape(32.dp),
+                    color = MaterialTheme.colorScheme.surfaceColorAtElevation(6.dp).copy(alpha = 0.85f),
+                    tonalElevation = 8.dp,
+                    shadowElevation = 12.dp,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .fillMaxWidth()
+                        .border(
+                            width = 1.dp,
+                            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                                listOf(
+                                    Color.White.copy(alpha = 0.25f),
+                                    Color.White.copy(alpha = 0.05f)
+                                )
+                            ),
+                            shape = RoundedCornerShape(32.dp)
                         )
+                ) {
+                    NavigationBar(
+                        containerColor = Color.Transparent,
+                        tonalElevation = 0.dp,
+                        modifier = Modifier.height(64.dp)
+                    ) {
+                        val items = listOf(
+                            Triple(stringResource(R.string.chats), Route.ChatList, Icons.AutoMirrored.Rounded.Chat),
+                            Triple(stringResource(R.string.status), Route.StatusList, Icons.Rounded.History),
+                            Triple(stringResource(R.string.channels), Route.Channels, Icons.Rounded.Campaign),
+                            Triple(stringResource(R.string.settings), Route.Settings, Icons.Rounded.Settings)
+                        )
+                        items.forEach { (label, route, icon) ->
+                            val isSelected = currentDestination.hierarchy.any { it.hasRoute(route::class) }
+                            NavigationBarItem(
+                                icon = { Icon(icon, contentDescription = label) },
+                                label = { Text(label, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                                selected = isSelected,
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = Color.White,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    indicatorColor = MaterialTheme.colorScheme.primary,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                ),
+                                onClick = {
+                                    navController.navigate(route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
