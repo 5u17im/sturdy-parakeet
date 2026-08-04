@@ -62,6 +62,7 @@ fun ChatDetailScreen(
     var showAttachmentMenu by remember { mutableStateOf(false) }
     var showStickerPicker by remember { mutableStateOf(false) }
     var isRecordingWalkieTalkie by remember { mutableStateOf(false) }
+    var replyingToMessage by remember { mutableStateOf<com.nothingsense.ns.data.local.entities.MessageEntity?>(null) }
 
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -141,6 +142,45 @@ fun ChatDetailScreen(
         },
         bottomBar = {
             Column {
+                if (replyingToMessage != null) {
+                    val replyMsg = replyingToMessage
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+                        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(4.dp)
+                                    .height(36.dp)
+                                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp))
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Respondiendo a mensaje",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = replyMsg?.text ?: "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            IconButton(onClick = { replyingToMessage = null }) {
+                                Icon(Icons.Rounded.Close, contentDescription = "Cancelar", modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
+                }
+
                 if (showAttachmentMenu) {
                     AttachmentMenu(
                         onTypeSelect = { type ->

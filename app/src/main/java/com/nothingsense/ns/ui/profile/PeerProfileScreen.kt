@@ -37,6 +37,7 @@ fun PeerProfileScreen(
     userId: String,
     username: String,
     reputationManager: ReputationManager,
+    transportManager: com.nothingsense.ns.network.HybridTransportManager? = null,
     onStartChat: () -> Unit,
     onStartCall: () -> Unit,
     onBack: () -> Unit
