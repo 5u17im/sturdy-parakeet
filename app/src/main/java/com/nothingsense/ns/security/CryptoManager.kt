@@ -198,4 +198,26 @@ class CryptoManager @Inject constructor(
         val bytes = MessageDigest.getInstance("SHA-256").digest(input.toByteArray())
         return bytes.take(8).joinToString(":") { "%02X".format(it) }
     }
+
+    fun padPayload(content: String, blockSize: Int = 512): String {
+        val remainder = content.length % blockSize
+        if (remainder == 0) return content
+        val paddingLength = blockSize - remainder
+        return content + " ".repeat(paddingLength)
+    }
+
+    fun unpadPayload(paddedContent: String): String {
+        return paddedContent.trimEnd()
+    }
+
+    fun secureWipe(bytes: ByteArray) {
+        java.util.Arrays.fill(bytes, 0.toByte())
+    }
+
+    fun generateSASCode(myFingerprint: String, peerFingerprint: String): String {
+        val sorted = listOf(myFingerprint, peerFingerprint).sorted().joinToString("::")
+        val hash = MessageDigest.getInstance("SHA-256").digest(sorted.toByteArray())
+        val number = Math.abs(hash.fold(0) { acc, byte -> (acc shl 8) or (byte.toInt() and 0xFF) }) % 10000
+        return "%04d".format(number)
+    }
 }
