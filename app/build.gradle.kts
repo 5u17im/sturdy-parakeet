@@ -14,15 +14,27 @@ android {
         applicationId = "com.nothingsense.ns"
         minSdk = 33
         targetSdk = 37
-        versionCode = 170
-        versionName = "1.7.0"
+        versionCode = 171
+        versionName = "1.7.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("releaseConfig") {
+            storeFile = file("nosense-release.jks")
+            storePassword = "nosensepassword"
+            keyAlias = "nosense"
+            keyPassword = "nosensepassword"
+        }
+    }
+
     buildTypes {
-        release {
-            signingConfig = signingConfigs.getByName("debug")
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("releaseConfig")
+        }
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("releaseConfig")
             optimization {
                 enable = false
             }
